@@ -15,4 +15,4 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 ![Metrics](https://metrics.lecoq.io/ckb2008?template=classic&base.indepth=false&base.hireable=false&config.timezone=Asia%2FShanghai)
-[![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=ckb2008&count_private=true&theme=graywhite)](https://github.com/anuraghazra/github-readme-stats)
+[![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=ckb2008&count_private=true&theme=material-palenight)](https://github.com/anuraghazra/github-readme-stats)
