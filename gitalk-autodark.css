@@ -1,0 +1,487 @@
+/*
+ * Gitalk 自动暗色样式（Auto Dark）+ 手动亮/暗切换支持
+ *
+ * 三种状态：
+ *   auto  -> 跟随系统设置（prefers-color-scheme）        （默认）
+ *   dark  -> 强制暗色（忽略系统设置）
+ *   light -> 强制亮色（忽略系统设置）
+ *
+ * 使用方式：
+ *   1) 在官方 gitalk.css 之后引入本文件：
+ *        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.css">
+ *        <link rel="stylesheet" href="gitalk-autodark.css">
+ *   2) 引入切换按钮脚本 gitalk-theme-toggle.js（它会把状态写到
+ *      <html> 的 class: gitalk-theme-auto / gitalk-theme-dark / gitalk-theme-light）。
+ *
+ * 实现核心：
+ *   - 所有颜色抽成 CSS 变量，亮色写在 .gt-container 上（默认）。
+ *   - 暗色变量由 @media (prefers-color-scheme: dark) 与 .gitalk-theme-dark 共同赋
+ *     值（后者优先级更高，用于「强制暗」）。
+ *   - .gitalk-theme-light 重新赋回亮色变量（用于「强制亮」，覆盖系统的暗色）。
+ */
+
+/* ============ 1. 亮色变量（默认） ============ */
+.gt-container {
+  --gt-text: #24292e;
+  --gt-link: #6190e8;
+  --gt-link-hover: #81a6ed;
+  --gt-accent: #6190e8;
+  --gt-accent-soft: rgba(97, 144, 232, 0.1);
+
+  --gt-btn-bg: #6190e8;
+  --gt-btn-border: #6190e8;
+  --gt-btn-text: #ffffff;
+  --gt-btn-hover-bg: #81a6ed;
+  --gt-btn-hover-border: #81a6ed;
+
+  --gt-btn-preview-bg: #ffffff;
+  --gt-btn-preview-text: #6190e8;
+  --gt-btn-preview-border: #e1e4e8;
+  --gt-btn-preview-hover-bg: #f2f2f2;
+  --gt-btn-preview-hover-border: #81a6ed;
+
+  --gt-border: #e9e9e9;
+  --gt-bg-input: #f6f6f6;
+  --gt-bg-input-hover: #fbfbfb;
+  --gt-bg-comment: #f9f9f9;
+  --gt-bg-comment-hover-shadow: rgba(244, 244, 244, 0.9);
+  --gt-bg-comment-admin: #f6f9fe;
+  --gt-bg-popup: #ffffff;
+
+  --gt-text-muted: #a1a1a1;
+  --gt-error: #ff3860;
+
+  --gt-loader-border: #999999;
+  --gt-spinner-track: #ffffff;
+  --gt-spinner-fill: #6190e8;
+
+  --gt-email-toggle-bg: #dfe2e5;
+  --gt-email-toggle-text: #444d56;
+  --gt-email-toggle-hover: #c6cbd1;
+  --gt-email-signature-text: #586069;
+  --gt-email-signature-border: #dfe2e5;
+
+  --gt-input-mask: rgba(0, 0, 0, 0.6);
+
+  /* ---- GitHub Markdown 正文 ---- */
+  --gt-md-text: #24292e;
+  --gt-md-link: #0366d6;
+  --gt-md-h-border: #eaecef;
+  --gt-md-hr: #e1e4e8;
+  --gt-md-quote: #6a737d;
+  --gt-md-quote-border: #dfe2e5;
+  --gt-md-code-bg: rgba(27, 31, 35, 0.05);
+  --gt-md-pre-bg: #f6f8fa;
+  --gt-md-table-bg: #ffffff;
+  --gt-md-table-stripe: #f6f8fa;
+  --gt-md-table-border: #dfe2e5;
+  --gt-md-kbd-bg: #fafbfc;
+  --gt-md-kbd-border: #c6cbd1;
+  --gt-md-kbd-border-bottom: #959da5;
+  --gt-md-kbd-text: #444d56;
+  --gt-md-img-bg: #ffffff;
+
+  /* 语法高亮 */
+  --gt-md-pl-c: #6a737d;
+  --gt-md-pl-ent: #22863a;
+  --gt-md-pl-k: #d73a49;
+  --gt-md-pl-s: #032f62;
+  --gt-md-pl-v: #e36209;
+  --gt-md-pl-smi: #24292e;
+}
+
+/* ============ 2. 暗色变量 ============ */
+/* 2a. 跟随系统：系统为深色时启用 */
+@media (prefers-color-scheme: dark) {
+  .gt-container {
+    --gt-text: #c9d1d9;
+    --gt-link: #79c0ff;
+    --gt-link-hover: #a3d0ff;
+    --gt-accent: #79c0ff;
+    --gt-accent-soft: rgba(121, 192, 255, 0.1);
+
+    --gt-btn-bg: #388bfd;
+    --gt-btn-border: #388bfd;
+    --gt-btn-text: #ffffff;
+    --gt-btn-hover-bg: #58a6ff;
+    --gt-btn-hover-border: #58a6ff;
+
+    --gt-btn-preview-bg: #0d1117;
+    --gt-btn-preview-text: #79c0ff;
+    --gt-btn-preview-border: #30363d;
+    --gt-btn-preview-hover-bg: #161b22;
+    --gt-btn-preview-hover-border: #79c0ff;
+
+    --gt-border: #30363d;
+    --gt-bg-input: #0d1117;
+    --gt-bg-input-hover: #161b22;
+    --gt-bg-comment: #161b22;
+    --gt-bg-comment-hover-shadow: rgba(0, 0, 0, 0.6);
+    --gt-bg-comment-admin: #1a2230;
+    --gt-bg-popup: #161b22;
+
+    --gt-text-muted: #8b949e;
+    --gt-error: #ff7b72;
+
+    --gt-loader-border: #8b949e;
+    --gt-spinner-track: #0d1117;
+    --gt-spinner-fill: #79c0ff;
+
+    --gt-email-toggle-bg: #30363d;
+    --gt-email-toggle-text: #8b949e;
+    --gt-email-toggle-hover: #484f58;
+    --gt-email-signature-text: #8b949e;
+    --gt-email-signature-border: #30363d;
+
+    --gt-input-mask: rgba(0, 0, 0, 0.6);
+
+    --gt-md-text: #c9d1d9;
+    --gt-md-link: #58a6ff;
+    --gt-md-h-border: #30363d;
+    --gt-md-hr: #30363d;
+    --gt-md-quote: #8b949e;
+    --gt-md-quote-border: #30363d;
+    --gt-md-code-bg: rgba(240, 246, 252, 0.1);
+    --gt-md-pre-bg: #161b22;
+    --gt-md-table-bg: #0d1117;
+    --gt-md-table-stripe: #161b22;
+    --gt-md-table-border: #30363d;
+    --gt-md-kbd-bg: #161b22;
+    --gt-md-kbd-border: #30363d;
+    --gt-md-kbd-border-bottom: #21262d;
+    --gt-md-kbd-text: #c9d1d9;
+    --gt-md-img-bg: transparent;
+
+    --gt-md-pl-c: #8b949e;
+    --gt-md-pl-ent: #7ee787;
+    --gt-md-pl-k: #ff7b72;
+    --gt-md-pl-s: #a5d6ff;
+    --gt-md-pl-v: #ffa657;
+    --gt-md-pl-smi: #c9d1d9;
+  }
+}
+
+/* 2b. 强制暗色：忽略系统设置（由切换按钮添加 .gitalk-theme-dark 到 <html>） */
+.gitalk-theme-dark .gt-container {
+  --gt-text: #c9d1d9;
+  --gt-link: #79c0ff;
+  --gt-link-hover: #a3d0ff;
+  --gt-accent: #79c0ff;
+  --gt-accent-soft: rgba(121, 192, 255, 0.1);
+
+  --gt-btn-bg: #388bfd;
+  --gt-btn-border: #388bfd;
+  --gt-btn-text: #ffffff;
+  --gt-btn-hover-bg: #58a6ff;
+  --gt-btn-hover-border: #58a6ff;
+
+  --gt-btn-preview-bg: #0d1117;
+  --gt-btn-preview-text: #79c0ff;
+  --gt-btn-preview-border: #30363d;
+  --gt-btn-preview-hover-bg: #161b22;
+  --gt-btn-preview-hover-border: #79c0ff;
+
+  --gt-border: #30363d;
+  --gt-bg-input: #0d1117;
+  --gt-bg-input-hover: #161b22;
+  --gt-bg-comment: #161b22;
+  --gt-bg-comment-hover-shadow: rgba(0, 0, 0, 0.6);
+  --gt-bg-comment-admin: #1a2230;
+  --gt-bg-popup: #161b22;
+
+  --gt-text-muted: #8b949e;
+  --gt-error: #ff7b72;
+
+  --gt-loader-border: #8b949e;
+  --gt-spinner-track: #0d1117;
+  --gt-spinner-fill: #79c0ff;
+
+  --gt-email-toggle-bg: #30363d;
+  --gt-email-toggle-text: #8b949e;
+  --gt-email-toggle-hover: #484f58;
+  --gt-email-signature-text: #8b949e;
+  --gt-email-signature-border: #30363d;
+
+  --gt-input-mask: rgba(0, 0, 0, 0.6);
+
+  --gt-md-text: #c9d1d9;
+  --gt-md-link: #58a6ff;
+  --gt-md-h-border: #30363d;
+  --gt-md-hr: #30363d;
+  --gt-md-quote: #8b949e;
+  --gt-md-quote-border: #30363d;
+  --gt-md-code-bg: rgba(240, 246, 252, 0.1);
+  --gt-md-pre-bg: #161b22;
+  --gt-md-table-bg: #0d1117;
+  --gt-md-table-stripe: #161b22;
+  --gt-md-table-border: #30363d;
+  --gt-md-kbd-bg: #161b22;
+  --gt-md-kbd-border: #30363d;
+  --gt-md-kbd-border-bottom: #21262d;
+  --gt-md-kbd-text: #c9d1d9;
+  --gt-md-img-bg: transparent;
+
+  --gt-md-pl-c: #8b949e;
+  --gt-md-pl-ent: #7ee787;
+  --gt-md-pl-k: #ff7b72;
+  --gt-md-pl-s: #a5d6ff;
+  --gt-md-pl-v: #ffa657;
+  --gt-md-pl-smi: #c9d1d9;
+}
+
+/* 2c. 强制亮色：忽略系统设置（由切换按钮添加 .gitalk-theme-light 到 <html>） */
+.gitalk-theme-light .gt-container {
+  --gt-text: #24292e;
+  --gt-link: #6190e8;
+  --gt-link-hover: #81a6ed;
+  --gt-accent: #6190e8;
+  --gt-accent-soft: rgba(97, 144, 232, 0.1);
+
+  --gt-btn-bg: #6190e8;
+  --gt-btn-border: #6190e8;
+  --gt-btn-text: #ffffff;
+  --gt-btn-hover-bg: #81a6ed;
+  --gt-btn-hover-border: #81a6ed;
+
+  --gt-btn-preview-bg: #ffffff;
+  --gt-btn-preview-text: #6190e8;
+  --gt-btn-preview-border: #e1e4e8;
+  --gt-btn-preview-hover-bg: #f2f2f2;
+  --gt-btn-preview-hover-border: #81a6ed;
+
+  --gt-border: #e9e9e9;
+  --gt-bg-input: #f6f6f6;
+  --gt-bg-input-hover: #fbfbfb;
+  --gt-bg-comment: #f9f9f9;
+  --gt-bg-comment-hover-shadow: rgba(244, 244, 244, 0.9);
+  --gt-bg-comment-admin: #f6f9fe;
+  --gt-bg-popup: #ffffff;
+
+  --gt-text-muted: #a1a1a1;
+  --gt-error: #ff3860;
+
+  --gt-loader-border: #999999;
+  --gt-spinner-track: #ffffff;
+  --gt-spinner-fill: #6190e8;
+
+  --gt-email-toggle-bg: #dfe2e5;
+  --gt-email-toggle-text: #444d56;
+  --gt-email-toggle-hover: #c6cbd1;
+  --gt-email-signature-text: #586069;
+  --gt-email-signature-border: #dfe2e5;
+
+  --gt-input-mask: rgba(0, 0, 0, 0.6);
+
+  --gt-md-text: #24292e;
+  --gt-md-link: #0366d6;
+  --gt-md-h-border: #eaecef;
+  --gt-md-hr: #e1e4e8;
+  --gt-md-quote: #6a737d;
+  --gt-md-quote-border: #dfe2e5;
+  --gt-md-code-bg: rgba(27, 31, 35, 0.05);
+  --gt-md-pre-bg: #f6f8fa;
+  --gt-md-table-bg: #ffffff;
+  --gt-md-table-stripe: #f6f8fa;
+  --gt-md-table-border: #dfe2e5;
+  --gt-md-kbd-bg: #fafbfc;
+  --gt-md-kbd-border: #c6cbd1;
+  --gt-md-kbd-border-bottom: #959da5;
+  --gt-md-kbd-text: #444d56;
+  --gt-md-img-bg: #ffffff;
+
+  --gt-md-pl-c: #6a737d;
+  --gt-md-pl-ent: #22863a;
+  --gt-md-pl-k: #d73a49;
+  --gt-md-pl-s: #032f62;
+  --gt-md-pl-v: #e36209;
+  --gt-md-pl-smi: #24292e;
+}
+
+/* ============ 3. 把变量应用到元素（覆盖官方写死的浅色值） ============ */
+.gt-container {
+  color: var(--gt-text);
+}
+
+.gt-container a,
+.gt-container a:hover {
+  color: var(--gt-link);
+}
+.gt-container a.is--active,
+.gt-container a.is--active:hover {
+  color: var(--gt-text);
+}
+.gt-container .gt-svg svg {
+  fill: var(--gt-accent);
+}
+.gt-container .gt-link {
+  border-bottom-color: var(--gt-accent);
+}
+.gt-container .gt-comment-username,
+.gt-container .gt-comment-username:hover {
+  color: var(--gt-link);
+}
+.gt-container .gt-header-controls-tip {
+  color: var(--gt-link);
+}
+.gt-container .gt-user .is--poping .gt-ico svg {
+  fill: var(--gt-accent);
+}
+.gt-container .gt-popup .gt-action.is--active:before {
+  background: var(--gt-accent);
+}
+
+/* 按钮 */
+.gt-container .gt-btn {
+  background-color: var(--gt-btn-bg);
+  border-color: var(--gt-btn-border);
+  color: var(--gt-btn-text);
+}
+.gt-container .gt-btn-preview {
+  background-color: var(--gt-btn-preview-bg);
+  color: var(--gt-btn-preview-text);
+  border-color: var(--gt-btn-preview-border);
+}
+.gt-container .gt-btn-preview:hover {
+  background-color: var(--gt-btn-preview-hover-bg);
+  border-color: var(--gt-btn-preview-hover-border);
+}
+.gt-container .gt-btn-public:hover {
+  background-color: var(--gt-btn-hover-bg);
+  border-color: var(--gt-btn-hover-border);
+}
+
+/* 加载 / spinner */
+.gt-container .gt-loader {
+  border-color: var(--gt-loader-border);
+}
+.gt-container .gt-loader:before {
+  background-color: var(--gt-loader-border);
+}
+.gt-container .gt-spinner::before {
+  border-color: var(--gt-spinner-track);
+  border-top-color: var(--gt-spinner-fill);
+}
+
+/* 边框 / 背景 */
+.gt-container .gt-meta,
+.gt-container .gt-copyright {
+  border-color: var(--gt-border);
+}
+.gt-container .gt-popup {
+  background: var(--gt-bg-popup);
+  border-color: var(--gt-border);
+}
+
+.gt-container .gt-header-textarea,
+.gt-container .gt-header-preview {
+  background-color: var(--gt-bg-input);
+  border-color: var(--gt-border);
+  color: var(--gt-text);
+}
+.gt-container .gt-header-textarea:hover {
+  background-color: var(--gt-bg-input-hover);
+}
+
+.gt-container .gt-comment-content {
+  background-color: var(--gt-bg-comment);
+  color: var(--gt-text);
+}
+.gt-container .gt-comment-content:hover {
+  box-shadow: 0 0.625em 3.75em 0 var(--gt-bg-comment-hover-shadow);
+}
+.gt-container .gt-comment-admin .gt-comment-content {
+  background-color: var(--gt-bg-comment-admin);
+}
+
+/* 评论正文（官方用了 !important，这里也必须 !important） */
+.gt-container .gt-comment-body {
+  color: var(--gt-text) !important;
+}
+.gt-container .gt-comment-text,
+.gt-container .gt-comment-date {
+  color: var(--gt-text-muted);
+}
+.gt-container .gt-version {
+  color: var(--gt-text-muted);
+}
+.gt-container .gt-error {
+  color: var(--gt-error);
+}
+
+/* 邮件隐藏回复块 */
+.gt-container .gt-comment-body .email-hidden-toggle a {
+  color: var(--gt-email-toggle-text);
+  background: var(--gt-email-toggle-bg);
+}
+.gt-container .gt-comment-body .email-hidden-toggle a:hover {
+  background-color: var(--gt-email-toggle-hover);
+}
+.gt-container .gt-comment-body .email-hidden-reply .email-signature-reply {
+  color: var(--gt-email-signature-text);
+  border-left-color: var(--gt-email-signature-border);
+}
+
+/* 输入聚焦遮罩 */
+.gt-container.gt-input-focused:after {
+  background: var(--gt-input-mask);
+}
+
+/* ============ 4. GitHub Markdown 正文（.markdown-body）暗色化 ============ */
+.gt-container .markdown-body {
+  color: var(--gt-md-text);
+}
+.gt-container .markdown-body a {
+  color: var(--gt-md-link);
+}
+.gt-container .markdown-body h1,
+.gt-container .markdown-body h2 {
+  border-bottom-color: var(--gt-md-h-border);
+}
+.gt-container .markdown-body hr {
+  background-color: var(--gt-md-hr);
+}
+.gt-container .markdown-body blockquote {
+  color: var(--gt-md-quote);
+  border-left-color: var(--gt-md-quote-border);
+}
+.gt-container .markdown-body code {
+  background-color: var(--gt-md-code-bg);
+}
+.gt-container .markdown-body .highlight pre,
+.gt-container .markdown-body pre {
+  background-color: var(--gt-md-pre-bg);
+}
+.gt-container .markdown-body table tr {
+  background-color: var(--gt-md-table-bg);
+  border-top-color: var(--gt-md-table-border);
+}
+.gt-container .markdown-body table tr:nth-child(2n) {
+  background-color: var(--gt-md-table-stripe);
+}
+.gt-container .markdown-body table th,
+.gt-container .markdown-body table td {
+  border-color: var(--gt-md-table-border);
+}
+.gt-container .markdown-body kbd {
+  color: var(--gt-md-kbd-text);
+  background-color: var(--gt-md-kbd-bg);
+  border-color: var(--gt-md-kbd-border);
+  border-bottom-color: var(--gt-md-kbd-border-bottom);
+}
+.gt-container .markdown-body img {
+  background-color: var(--gt-md-img-bg);
+}
+.gt-container .markdown-body .pl-c,
+.gt-container .markdown-body .pl-c1,
+.gt-container .markdown-body .pl-s .pl-v { color: var(--gt-md-pl-c); }
+.gt-container .markdown-body .pl-e,
+.gt-container .markdown-body .pl-en { color: var(--gt-md-pl-ent); }
+.gt-container .markdown-body .pl-smi,
+.gt-container .markdown-body .pl-s .pl-s1 { color: var(--gt-md-pl-smi); }
+.gt-container .markdown-body .pl-ent { color: var(--gt-md-pl-ent); }
+.gt-container .markdown-body .pl-k { color: var(--gt-md-pl-k); }
+.gt-container .markdown-body .pl-s,
+.gt-container .markdown-body .pl-pds,
+.gt-container .markdown-body .pl-sr { color: var(--gt-md-pl-s); }
+.gt-container .markdown-body .pl-v,
+.gt-container .markdown-body .pl-smw { color: var(--gt-md-pl-v); }
