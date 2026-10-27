@@ -1,571 +1,373 @@
 /*
- * Gitalk 自动暗色样式（Auto Dark）+ 手动亮/暗切换支持
+ * Gitment 自动暗色样式（Custom CSS 版本）
+ * 作用：在「不替换主题、仅自定义 CSS」的场景下，让官方 default 主题
+ *       跟随系统设置（prefers-color-scheme）在亮色 / 暗色间切换。
  *
- * 三种状态：
- *   auto  -> 跟随系统设置（prefers-color-scheme）        （默认）
- *   dark  -> 强制暗色（忽略系统设置）
- *   light -> 强制亮色（忽略系统设置）
+ * 使用方式（见 Gitment 官方文档 https://github.com/imsun/gitment）：
+ *   在你的页面中引入 official gitment 默认 CSS/JS 之后，再引入本文件即可。
+ *   例如：
+ *     <link rel="stylesheet" href="https://imsun.github.io/gitment/style/default.css">
+ *     <link rel="stylesheet" href="gitment-autodark.css">
  *
- * 使用方式：
- *   1) 在官方 gitalk.css 之后引入本文件：
- *        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.css">
- *        <link rel="stylesheet" href="gitalk-autodark.css">
- *   2) 引入切换按钮脚本 gitalk-theme-toggle.js（它会把状态写到
- *      <html> 的 class: gitalk-theme-auto / gitalk-theme-dark / gitalk-theme-light）。
- *
- * 实现核心：
- *   - 所有颜色抽成 CSS 变量，亮色写在 .gt-container 上（默认）。
- *   - 暗色变量由 @media (prefers-color-scheme: dark) 与 .gitalk-theme-dark 共同赋
- *     值（后者优先级更高，用于「强制暗」）。
- *   - .gitalk-theme-light 重新赋回亮色变量（用于「强制亮」，覆盖系统的暗色）。
+ * 注意：Custom CSS 只能改样式、不能改 DOM 结构，因此本文件完全复用
+ *       官方 default 主题已有的 .gitment-* 类名，无需任何 JS。
  */
 
-/* ============ 1. 亮色变量（默认） ============ */
-.gt-container {
-  --gt-text: #24292e;
-  --gt-link: #6190e8;
-  --gt-link-hover: #81a6ed;
-  --gt-accent: #6190e8;
-  --gt-accent-soft: rgba(97, 144, 232, 0.1);
-
-  --gt-btn-bg: #6190e8;
-  --gt-btn-border: #6190e8;
-  --gt-btn-text: #ffffff;
-  --gt-btn-hover-bg: #81a6ed;
-  --gt-btn-hover-border: #81a6ed;
-
-  --gt-btn-preview-bg: #ffffff;
-  --gt-btn-preview-text: #6190e8;
-  --gt-btn-preview-border: #e1e4e8;
-  --gt-btn-preview-hover-bg: #f2f2f2;
-  --gt-btn-preview-hover-border: #81a6ed;
-
-  --gt-border: #e9e9e9;
-  --gt-bg-input: #f6f6f6;
-  --gt-bg-input-hover: #fbfbfb;
-  --gt-bg-comment: #f9f9f9;
-  --gt-bg-comment-hover-shadow: rgba(244, 244, 244, 0.9);
-  --gt-bg-comment-admin: #f6f9fe;
-  --gt-bg-popup: #ffffff;
-
-  --gt-text-muted: #a1a1a1;
-  --gt-error: #ff3860;
-
-  --gt-loader-border: #999999;
-  --gt-spinner-track: #ffffff;
-  --gt-spinner-fill: #6190e8;
-
-  --gt-email-toggle-bg: #dfe2e5;
-  --gt-email-toggle-text: #444d56;
-  --gt-email-toggle-hover: #c6cbd1;
-  --gt-email-signature-text: #586069;
-  --gt-email-signature-border: #dfe2e5;
-
-  --gt-input-mask: rgba(0, 0, 0, 0.6);
-
-  /* 原生滚动条（亮色） */
-  --gt-scrollbar-track: #f1f1f1;
-  --gt-scrollbar-thumb: #c1c1c1;
-  --gt-scrollbar-thumb-hover: #a8a8a8;
-
-  /* ---- GitHub Markdown 正文 ---- */
-  --gt-md-text: #24292e;
-  --gt-md-link: #0366d6;
-  --gt-md-h-border: #eaecef;
-  --gt-md-hr: #e1e4e8;
-  --gt-md-quote: #6a737d;
-  --gt-md-quote-border: #dfe2e5;
-  --gt-md-code-bg: rgba(27, 31, 35, 0.05);
-  --gt-md-pre-bg: #f6f8fa;
-  --gt-md-table-bg: #ffffff;
-  --gt-md-table-stripe: #f6f8fa;
-  --gt-md-table-border: #dfe2e5;
-  --gt-md-kbd-bg: #fafbfc;
-  --gt-md-kbd-border: #c6cbd1;
-  --gt-md-kbd-border-bottom: #959da5;
-  --gt-md-kbd-text: #444d56;
-  --gt-md-img-bg: #ffffff;
-
-  /* 语法高亮 */
-  --gt-md-pl-c: #6a737d;
-  --gt-md-pl-ent: #22863a;
-  --gt-md-pl-k: #d73a49;
-  --gt-md-pl-s: #032f62;
-  --gt-md-pl-v: #e36209;
-  --gt-md-pl-smi: #24292e;
+/* ---------- 亮色（默认） ---------- */
+.gitment-container {
+  --gm-bg: #ffffff;
+  --gm-fg: #24292e;
+  --gm-fg-muted: #586069;
+  --gm-border: #e1e4e8;
+  --gm-border-muted: #eaecef;
+  --gm-link: #0366d6;
+  --gm-accent: #2dba4e;
+  --gm-btn-bg: #28a745;
+  --gm-btn-fg: #ffffff;
+  --gm-btn-hover: #269f42;
+  --gm-code-bg: rgba(27, 31, 35, 0.05);
+  --gm-quote-border: #dfe2e5;
+  --gm-header-bg: #f6f8fa;
+  --gm-snippet-bg: #f6f8fa;
+  --gm-markdown-border: #e1e4e8;
+  --gm-tab-bg: #ffffff;
+  --gm-tab-active-bg: #ffffff;
+  --gm-tab-border: transparent transparent #d1d5da;
+  --gm-avatar-border: #e1e4e8;
+  --gm-pagination-hover-bg: #f6f8fa;
+  --gm-selected-bg: #0366d6;
+  --gm-selected-fg: #ffffff;
+  --gm-error-fg: #cb2431;
 }
 
-/* ============ 2. 暗色变量 ============ */
-/* 2a. 跟随系统：系统为深色时启用 */
+/* ---------- 暗色：跟随系统设置 ---------- */
 @media (prefers-color-scheme: dark) {
-  .gt-container {
-    --gt-text: #c9d1d9;
-    --gt-link: #79c0ff;
-    --gt-link-hover: #a3d0ff;
-    --gt-accent: #79c0ff;
-    --gt-accent-soft: rgba(121, 192, 255, 0.1);
-
-    --gt-btn-bg: #388bfd;
-    --gt-btn-border: #388bfd;
-    --gt-btn-text: #ffffff;
-    --gt-btn-hover-bg: #58a6ff;
-    --gt-btn-hover-border: #58a6ff;
-
-    --gt-btn-preview-bg: #0d1117;
-    --gt-btn-preview-text: #79c0ff;
-    --gt-btn-preview-border: #30363d;
-    --gt-btn-preview-hover-bg: #161b22;
-    --gt-btn-preview-hover-border: #79c0ff;
-
-    --gt-border: #30363d;
-    --gt-bg-input: #0d1117;
-    --gt-bg-input-hover: #161b22;
-    --gt-bg-comment: #161b22;
-    --gt-bg-comment-hover-shadow: rgba(0, 0, 0, 0.6);
-    --gt-bg-comment-admin: #1a2230;
-    --gt-bg-popup: #161b22;
-
-    --gt-text-muted: #8b949e;
-    --gt-error: #ff7b72;
-
-    --gt-loader-border: #8b949e;
-    --gt-spinner-track: #0d1117;
-    --gt-spinner-fill: #79c0ff;
-
-    --gt-email-toggle-bg: #30363d;
-    --gt-email-toggle-text: #8b949e;
-    --gt-email-toggle-hover: #484f58;
-    --gt-email-signature-text: #8b949e;
-    --gt-email-signature-border: #30363d;
-
-    --gt-input-mask: rgba(0, 0, 0, 0.6);
-
-    /* 原生滚动条（暗色） */
-    --gt-scrollbar-track: #161b22;
-    --gt-scrollbar-thumb: #30363d;
-    --gt-scrollbar-thumb-hover: #484f58;
-
-    --gt-md-text: #c9d1d9;
-    --gt-md-link: #58a6ff;
-    --gt-md-h-border: #30363d;
-    --gt-md-hr: #30363d;
-    --gt-md-quote: #8b949e;
-    --gt-md-quote-border: #30363d;
-    --gt-md-code-bg: rgba(240, 246, 252, 0.1);
-    --gt-md-pre-bg: #161b22;
-    --gt-md-table-bg: #0d1117;
-    --gt-md-table-stripe: #161b22;
-    --gt-md-table-border: #30363d;
-    --gt-md-kbd-bg: #161b22;
-    --gt-md-kbd-border: #30363d;
-    --gt-md-kbd-border-bottom: #21262d;
-    --gt-md-kbd-text: #c9d1d9;
-    --gt-md-img-bg: transparent;
-
-    --gt-md-pl-c: #8b949e;
-    --gt-md-pl-ent: #7ee787;
-    --gt-md-pl-k: #ff7b72;
-    --gt-md-pl-s: #a5d6ff;
-    --gt-md-pl-v: #ffa657;
-    --gt-md-pl-smi: #c9d1d9;
+  .gitment-container {
+    --gm-bg: #0d1117;
+    --gm-fg: #c9d1d9;
+    --gm-fg-muted: #8b949e;
+    --gm-border: #30363d;
+    --gm-border-muted: #21262d;
+    --gm-link: #58a6ff;
+    --gm-accent: #2ea043;
+    --gm-btn-bg: #238636;
+    --gm-btn-fg: #ffffff;
+    --gm-btn-hover: #2ea043;
+    --gm-code-bg: rgba(240, 246, 252, 0.1);
+    --gm-quote-border: #30363d;
+    --gm-header-bg: #161b22;
+    --gm-snippet-bg: #161b22;
+    --gm-markdown-border: #30363d;
+    --gm-tab-bg: #0d1117;
+    --gm-tab-active-bg: #0d1117;
+    --gm-tab-border: transparent transparent #f9826c;
+    --gm-avatar-border: #30363d;
+    --gm-pagination-hover-bg: #161b22;
+    --gm-selected-bg: #1f6feb;
+    --gm-selected-fg: #ffffff;
+    --gm-error-fg: #f85149;
   }
 }
 
-/* 2b. 强制暗色：忽略系统设置（由切换按钮添加 .gitalk-theme-dark 到 <html>） */
-.gitalk-theme-dark .gt-container {
-  --gt-text: #c9d1d9;
-  --gt-link: #79c0ff;
-  --gt-link-hover: #a3d0ff;
-  --gt-accent: #79c0ff;
-  --gt-accent-soft: rgba(121, 192, 255, 0.1);
-
-  --gt-btn-bg: #388bfd;
-  --gt-btn-border: #388bfd;
-  --gt-btn-text: #ffffff;
-  --gt-btn-hover-bg: #58a6ff;
-  --gt-btn-hover-border: #58a6ff;
-
-  --gt-btn-preview-bg: #0d1117;
-  --gt-btn-preview-text: #79c0ff;
-  --gt-btn-preview-border: #30363d;
-  --gt-btn-preview-hover-bg: #161b22;
-  --gt-btn-preview-hover-border: #79c0ff;
-
-  --gt-border: #30363d;
-  --gt-bg-input: #0d1117;
-  --gt-bg-input-hover: #161b22;
-  --gt-bg-comment: #161b22;
-  --gt-bg-comment-hover-shadow: rgba(0, 0, 0, 0.6);
-  --gt-bg-comment-admin: #1a2230;
-  --gt-bg-popup: #161b22;
-
-  --gt-text-muted: #8b949e;
-  --gt-error: #ff7b72;
-
-  --gt-loader-border: #8b949e;
-  --gt-spinner-track: #0d1117;
-  --gt-spinner-fill: #79c0ff;
-
-  --gt-email-toggle-bg: #30363d;
-  --gt-email-toggle-text: #8b949e;
-  --gt-email-toggle-hover: #484f58;
-  --gt-email-signature-text: #8b949e;
-  --gt-email-signature-border: #30363d;
-
-  --gt-input-mask: rgba(0, 0, 0, 0.6);
-
-  /* 原生滚动条（暗色） */
-  --gt-scrollbar-track: #161b22;
-  --gt-scrollbar-thumb: #30363d;
-  --gt-scrollbar-thumb-hover: #484f58;
-
-  --gt-md-text: #c9d1d9;
-  --gt-md-link: #58a6ff;
-  --gt-md-h-border: #30363d;
-  --gt-md-hr: #30363d;
-  --gt-md-quote: #8b949e;
-  --gt-md-quote-border: #30363d;
-  --gt-md-code-bg: rgba(240, 246, 252, 0.1);
-  --gt-md-pre-bg: #161b22;
-  --gt-md-table-bg: #0d1117;
-  --gt-md-table-stripe: #161b22;
-  --gt-md-table-border: #30363d;
-  --gt-md-kbd-bg: #161b22;
-  --gt-md-kbd-border: #30363d;
-  --gt-md-kbd-border-bottom: #21262d;
-  --gt-md-kbd-text: #c9d1d9;
-  --gt-md-img-bg: transparent;
-
-  --gt-md-pl-c: #8b949e;
-  --gt-md-pl-ent: #7ee787;
-  --gt-md-pl-k: #ff7b72;
-  --gt-md-pl-s: #a5d6ff;
-  --gt-md-pl-v: #ffa657;
-  --gt-md-pl-smi: #c9d1d9;
+/* ---------- 基础布局 ---------- */
+.gitment-container {
+  color: var(--gm-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.gitment-container a {
+  color: var(--gm-link);
+  text-decoration: none;
+}
+.gitment-container a:hover {
+  text-decoration: underline;
 }
 
-/* 2c. 强制亮色：忽略系统设置（由切换按钮添加 .gitalk-theme-light 到 <html>） */
-.gitalk-theme-light .gt-container {
-  --gt-text: #24292e;
-  --gt-link: #6190e8;
-  --gt-link-hover: #81a6ed;
-  --gt-accent: #6190e8;
-  --gt-accent-soft: rgba(97, 144, 232, 0.1);
-
-  --gt-btn-bg: #6190e8;
-  --gt-btn-border: #6190e8;
-  --gt-btn-text: #ffffff;
-  --gt-btn-hover-bg: #81a6ed;
-  --gt-btn-hover-border: #81a6ed;
-
-  --gt-btn-preview-bg: #ffffff;
-  --gt-btn-preview-text: #6190e8;
-  --gt-btn-preview-border: #e1e4e8;
-  --gt-btn-preview-hover-bg: #f2f2f2;
-  --gt-btn-preview-hover-border: #81a6ed;
-
-  --gt-border: #e9e9e9;
-  --gt-bg-input: #f6f6f6;
-  --gt-bg-input-hover: #fbfbfb;
-  --gt-bg-comment: #f9f9f9;
-  --gt-bg-comment-hover-shadow: rgba(244, 244, 244, 0.9);
-  --gt-bg-comment-admin: #f6f9fe;
-  --gt-bg-popup: #ffffff;
-
-  --gt-text-muted: #a1a1a1;
-  --gt-error: #ff3860;
-
-  --gt-loader-border: #999999;
-  --gt-spinner-track: #ffffff;
-  --gt-spinner-fill: #6190e8;
-
-  --gt-email-toggle-bg: #dfe2e5;
-  --gt-email-toggle-text: #444d56;
-  --gt-email-toggle-hover: #c6cbd1;
-  --gt-email-signature-text: #586069;
-  --gt-email-signature-border: #dfe2e5;
-
-  --gt-input-mask: rgba(0, 0, 0, 0.6);
-
-  /* 原生滚动条（亮色） */
-  --gt-scrollbar-track: #f1f1f1;
-  --gt-scrollbar-thumb: #c1c1c1;
-  --gt-scrollbar-thumb-hover: #a8a8a8;
-
-  --gt-md-text: #24292e;
-  --gt-md-link: #0366d6;
-  --gt-md-h-border: #eaecef;
-  --gt-md-hr: #e1e4e8;
-  --gt-md-quote: #6a737d;
-  --gt-md-quote-border: #dfe2e5;
-  --gt-md-code-bg: rgba(27, 31, 35, 0.05);
-  --gt-md-pre-bg: #f6f8fa;
-  --gt-md-table-bg: #ffffff;
-  --gt-md-table-stripe: #f6f8fa;
-  --gt-md-table-border: #dfe2e5;
-  --gt-md-kbd-bg: #fafbfc;
-  --gt-md-kbd-border: #c6cbd1;
-  --gt-md-kbd-border-bottom: #959da5;
-  --gt-md-kbd-text: #444d56;
-  --gt-md-img-bg: #ffffff;
-
-  --gt-md-pl-c: #6a737d;
-  --gt-md-pl-ent: #22863a;
-  --gt-md-pl-k: #d73a49;
-  --gt-md-pl-s: #032f62;
-  --gt-md-pl-v: #e36209;
-  --gt-md-pl-smi: #24292e;
+/* ---------- Header ---------- */
+.gitment-header-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.gitment-header-like-btn,
+.gitment-comments-like-btn {
+  cursor: pointer;
+  color: var(--gm-fg-muted);
+  user-select: none;
+}
+.gitment-header-like-btn.liked,
+.gitment-comments-like-btn.liked {
+  color: var(--gm-accent);
+}
+.gitment-header-issue-link {
+  margin-left: auto;
+  color: var(--gm-fg-muted);
 }
 
-/* ============ 3. 把变量应用到元素（覆盖官方写死的浅色值） ============ */
-.gt-container {
-  color: var(--gt-text);
-}
-
-.gt-container a,
-.gt-container a:hover {
-  color: var(--gt-link);
-}
-.gt-container a.is--active,
-.gt-container a.is--active:hover {
-  color: var(--gt-text);
-}
-.gt-container .gt-svg svg {
-  fill: var(--gt-accent);
-}
-.gt-container .gt-link {
-  border-bottom-color: var(--gt-accent);
-}
-.gt-container .gt-comment-username,
-.gt-container .gt-comment-username:hover {
-  color: var(--gt-link);
-}
-.gt-container .gt-header-controls-tip {
-  color: var(--gt-link);
-}
-.gt-container .gt-user .is--poping .gt-ico svg {
-  fill: var(--gt-accent);
-}
-.gt-container .gt-popup .gt-action.is--active:before {
-  background: var(--gt-accent);
-}
-
-/* 按钮 */
-.gt-container .gt-btn {
-  background-color: var(--gt-btn-bg);
-  border-color: var(--gt-btn-border);
-  color: var(--gt-btn-text);
-}
-.gt-container .gt-btn-preview {
-  background-color: var(--gt-btn-preview-bg);
-  color: var(--gt-btn-preview-text);
-  border-color: var(--gt-btn-preview-border);
-}
-.gt-container .gt-btn-preview:hover {
-  background-color: var(--gt-btn-preview-hover-bg);
-  border-color: var(--gt-btn-preview-hover-border);
-}
-.gt-container .gt-btn-public:hover {
-  background-color: var(--gt-btn-hover-bg);
-  border-color: var(--gt-btn-hover-border);
-}
-
-/* 加载 / spinner */
-.gt-container .gt-loader {
-  border-color: var(--gt-loader-border);
-}
-.gt-container .gt-loader:before {
-  background-color: var(--gt-loader-border);
-}
-.gt-container .gt-spinner::before {
-  border-color: var(--gt-spinner-track);
-  border-top-color: var(--gt-spinner-fill);
-}
-
-/* 边框 / 背景 */
-.gt-container .gt-meta,
-.gt-container .gt-copyright {
-  border-color: var(--gt-border);
-}
-.gt-container .gt-popup {
-  background: var(--gt-bg-popup);
-  border-color: var(--gt-border);
-}
-
-.gt-container .gt-header-textarea,
-.gt-container .gt-header-preview {
-  background-color: var(--gt-bg-input);
-  border-color: var(--gt-border);
-  color: var(--gt-text);
-  /* 编辑(edit)界面英文字体设置为 Consolas；中文回退系统无衬线 */
-  font-family: Consolas, "Courier New", "SFMono-Regular", "Microsoft YaHei",
-    "PingFang SC", "Hiragino Sans GB", monospace;
-}
-.gt-container .gt-header-textarea:hover {
-  background-color: var(--gt-bg-input-hover);
-}
-/* 编辑区弹出菜单（语言/Label 等）同样使用 Consolas 英文字体 */
-.gt-container .gt-popup,
-.gt-container .gt-popup .gt-action {
-  font-family: Consolas, "Courier New", "SFMono-Regular", "Microsoft YaHei",
-    "PingFang SC", "Hiragino Sans GB", monospace;
-}
-
-/* ============ 原生滚动条（自适应主题） ============ */
-.gt-container {
-  scrollbar-color: var(--gt-scrollbar-thumb) var(--gt-scrollbar-track);
-  scrollbar-width: thin;
-}
-.gt-container ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.gt-container ::-webkit-scrollbar-track {
-  background: var(--gt-scrollbar-track);
-}
-.gt-container ::-webkit-scrollbar-thumb {
-  background: var(--gt-scrollbar-thumb);
+/* ---------- Comments ---------- */
+.gitment-comments-loading,
+.gitment-comments-empty,
+.gitment-comments-error {
+  padding: 2em 1em;
+  text-align: center;
+  color: var(--gm-fg-muted);
+  border: 1px solid var(--gm-border);
   border-radius: 6px;
-  border: 2px solid var(--gt-scrollbar-track);
+  background: var(--gm-bg);
 }
-.gt-container ::-webkit-scrollbar-thumb:hover {
-  background: var(--gt-scrollbar-thumb-hover);
+.gitment-comments-error {
+  color: var(--gm-error-fg);
 }
-/* 评论正文与代码块内部出现滚动时同样适用 */
-.gt-container .gt-comment-content,
-.gt-container .markdown-body pre,
-.gt-container .markdown-body .highlight pre,
-.gt-container .gt-header-textarea {
-  scrollbar-color: var(--gt-scrollbar-thumb) var(--gt-scrollbar-track);
-}
-.gt-container .gt-comment-content::-webkit-scrollbar,
-.gt-container .markdown-body pre::-webkit-scrollbar,
-.gt-container .markdown-body .highlight pre::-webkit-scrollbar,
-.gt-container .gt-header-textarea::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.gt-container .gt-comment-content::-webkit-scrollbar-track,
-.gt-container .markdown-body pre::-webkit-scrollbar-track,
-.gt-container .markdown-body .highlight pre::-webkit-scrollbar-track,
-.gt-container .gt-header-textarea::-webkit-scrollbar-track {
-  background: var(--gt-scrollbar-track);
-}
-.gt-container .gt-comment-content::-webkit-scrollbar-thumb,
-.gt-container .markdown-body pre::-webkit-scrollbar-thumb,
-.gt-container .markdown-body .highlight pre::-webkit-scrollbar-thumb,
-.gt-container .gt-header-textarea::-webkit-scrollbar-thumb {
-  background: var(--gt-scrollbar-thumb);
+.gitment-comments-init-btn {
+  cursor: pointer;
+  color: var(--gm-btn-fg);
+  background: var(--gm-btn-bg);
+  border: 1px solid var(--gm-btn-bg);
   border-radius: 6px;
-  border: 2px solid var(--gt-scrollbar-track);
+  padding: 6px 16px;
+  font-size: 14px;
 }
-.gt-container .gt-comment-content::-webkit-scrollbar-thumb:hover,
-.gt-container .markdown-body pre::-webkit-scrollbar-thumb:hover,
-.gt-container .markdown-body .highlight pre::-webkit-scrollbar-thumb:hover,
-.gt-container .gt-header-textarea::-webkit-scrollbar-thumb:hover {
-  background: var(--gt-scrollbar-thumb-hover);
+.gitment-comments-init-btn:hover:not([disabled]) {
+  background: var(--gm-btn-hover);
 }
 
-.gt-container .gt-comment-content {
-  background-color: var(--gt-bg-comment);
-  color: var(--gt-text);
+.gitment-comments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
-.gt-container .gt-comment-content:hover {
-  box-shadow: 0 0.625em 3.75em 0 var(--gt-bg-comment-hover-shadow);
+.gitment-comment {
+  position: relative;
+  padding: 16px;
+  border: 1px solid var(--gm-border);
+  border-radius: 6px;
+  margin: 1em 0;
+  background: var(--gm-bg);
 }
-.gt-container .gt-comment-admin .gt-comment-content {
-  background-color: var(--gt-bg-comment-admin);
+.gitment-comment-header {
+  margin-bottom: 12px;
+  color: var(--gm-fg-muted);
+}
+.gitment-comment-avatar {
+  float: left;
+  margin-right: 14px;
+}
+.gitment-comment-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--gm-avatar-border);
+}
+.gitment-comment-author {
+  font-weight: 600;
+  color: var(--gm-fg);
+}
+.gitment-comment-like-btn {
+  float: right;
+}
+.gitment-comment-body {
+  clear: both;
+  overflow: hidden;
+}
+.gitment-comment-body-folded {
+  cursor: pointer;
+  overflow: hidden;
+}
+.gitment-comment-body-folded::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--gm-bg));
+  pointer-events: none;
 }
 
-/* 评论正文（官方用了 !important，这里也必须 !important） */
-.gt-container .gt-comment-body {
-  color: var(--gt-text) !important;
+/* ---------- Markdown 正文 ---------- */
+.gitment-markdown {
+  color: var(--gm-fg);
 }
-.gt-container .gt-comment-text,
-.gt-container .gt-comment-date {
-  color: var(--gt-text-muted);
+.gitment-markdown pre {
+  background: var(--gm-snippet-bg);
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
 }
-.gt-container .gt-version {
-  color: var(--gt-text-muted);
+.gitment-markdown code {
+  background: var(--gm-code-bg);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  font-size: 85%;
 }
-.gt-container .gt-error {
-  color: var(--gt-error);
+.gitment-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+.gitment-markdown blockquote {
+  margin: 0 0 16px;
+  padding: 0 1em;
+  border-left: 4px solid var(--gm-quote-border);
+  color: var(--gm-fg-muted);
+}
+.gitment-markdown img {
+  max-width: 100%;
+}
+.gitment-markdown table {
+  border-collapse: collapse;
+}
+.gitment-markdown table th,
+.gitment-markdown table td {
+  border: 1px solid var(--gm-markdown-border);
+  padding: 6px 13px;
 }
 
-/* 邮件隐藏回复块 */
-.gt-container .gt-comment-body .email-hidden-toggle a {
-  color: var(--gt-email-toggle-text);
-  background: var(--gt-email-toggle-bg);
+/* ---------- Editor ---------- */
+.gitment-editor-container {
+  border: 1px solid var(--gm-border);
+  border-radius: 6px;
+  background: var(--gm-bg);
 }
-.gt-container .gt-comment-body .email-hidden-toggle a:hover {
-  background-color: var(--gt-email-toggle-hover);
+.gitment-editor-header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--gm-border);
+  background: var(--gm-header-bg);
+  border-radius: 6px 6px 0 0;
 }
-.gt-container .gt-comment-body .email-hidden-reply .email-signature-reply {
-  color: var(--gt-email-signature-text);
-  border-left-color: var(--gt-email-signature-border);
+.gitment-editor-tab {
+  display: inline-block;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--gm-fg-muted);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--gm-tab-bg);
+}
+.gitment-editor-tab.gitment-selected {
+  color: var(--gm-fg);
+  border-color: var(--gm-border) var(--gm-border) var(--gm-tab-border);
+  background: var(--gm-tab-active-bg);
+  margin-bottom: -1px;
+}
+.gitment-editor-login {
+  float: right;
+  color: var(--gm-fg-muted);
+}
+.gitment-editor-avatar {
+  float: left;
+  margin-right: 12px;
+}
+.gitment-editor-avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--gm-avatar-border);
+}
+.gitment-editor-body {
+  padding: 16px;
+  overflow: hidden;
+}
+.gitment-editor-write-field textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px 12px;
+  color: var(--gm-fg);
+  background: var(--gm-bg);
+  border: 1px solid var(--gm-border);
+  border-radius: 6px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.gitment-editor-write-field textarea:disabled {
+  background: var(--gm-header-bg);
+  cursor: not-allowed;
+}
+.gitment-editor-preview {
+  min-height: 120px;
+  padding: 8px 12px;
+  border: 1px solid var(--gm-border);
+  border-radius: 6px;
+}
+.gitment-editor-footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--gm-border);
+  background: var(--gm-header-bg);
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+.gitment-editor-footer-tip {
+  float: left;
+  color: var(--gm-fg-muted);
+  font-size: 12px;
+}
+.gitment-editor-submit {
+  float: right;
+  cursor: pointer;
+  color: var(--gm-btn-fg);
+  background: var(--gm-btn-bg);
+  border: 1px solid var(--gm-btn-bg);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 14px;
+}
+.gitment-editor-submit:hover:not([disabled]) {
+  background: var(--gm-btn-hover);
+}
+.gitment-editor-submit[disabled] {
+  opacity: 0.6;
+  cursor: default;
 }
 
-/* 输入聚焦遮罩 */
-.gt-container.gt-input-focused:after {
-  background: var(--gt-input-mask);
+/* ---------- Pagination ---------- */
+.gitment-comments-pagination {
+  list-style: none;
+  padding: 0;
+  margin: 1em 0 0;
+  text-align: right;
+}
+.gitment-comments-page-item {
+  display: inline-block;
+  padding: 4px 10px;
+  margin-left: 4px;
+  cursor: pointer;
+  color: var(--gm-link);
+  border: 1px solid var(--gm-border);
+  border-radius: 4px;
+}
+.gitment-comments-page-item:hover {
+  background: var(--gm-pagination-hover-bg);
+}
+.gitment-comments-page-item.gitment-selected {
+  color: var(--gm-selected-fg);
+  background: var(--gm-selected-bg);
+  border-color: var(--gm-selected-bg);
+  cursor: default;
 }
 
-/* ============ 4. GitHub Markdown 正文（.markdown-body）暗色化 ============ */
-.gt-container .markdown-body {
-  color: var(--gt-md-text);
+/* ---------- Footer ---------- */
+.gitment-footer-container {
+  margin-top: 1.2em;
+  text-align: right;
+  color: var(--gm-fg-muted);
+  font-size: 12px;
 }
-.gt-container .markdown-body a {
-  color: var(--gt-md-link);
+
+/* ---------- 杂项 ---------- */
+.gitment-hidden {
+  display: none !important;
 }
-.gt-container .markdown-body h1,
-.gt-container .markdown-body h2 {
-  border-bottom-color: var(--gt-md-h-border);
+.gitment-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  animation: gitment-spin 1s steps(12) infinite;
 }
-.gt-container .markdown-body hr {
-  background-color: var(--gt-md-hr);
+@keyframes gitment-spin {
+  to { transform: rotate(360deg); }
 }
-.gt-container .markdown-body blockquote {
-  color: var(--gt-md-quote);
-  border-left-color: var(--gt-md-quote-border);
-}
-.gt-container .markdown-body code {
-  background-color: var(--gt-md-code-bg);
-}
-.gt-container .markdown-body .highlight pre,
-.gt-container .markdown-body pre {
-  background-color: var(--gt-md-pre-bg);
-}
-.gt-container .markdown-body table tr {
-  background-color: var(--gt-md-table-bg);
-  border-top-color: var(--gt-md-table-border);
-}
-.gt-container .markdown-body table tr:nth-child(2n) {
-  background-color: var(--gt-md-table-stripe);
-}
-.gt-container .markdown-body table th,
-.gt-container .markdown-body table td {
-  border-color: var(--gt-md-table-border);
-}
-.gt-container .markdown-body kbd {
-  color: var(--gt-md-kbd-text);
-  background-color: var(--gt-md-kbd-bg);
-  border-color: var(--gt-md-kbd-border);
-  border-bottom-color: var(--gt-md-kbd-border-bottom);
-}
-.gt-container .markdown-body img {
-  background-color: var(--gt-md-img-bg);
-}
-.gt-container .markdown-body .pl-c,
-.gt-container .markdown-body .pl-c1,
-.gt-container .markdown-body .pl-s .pl-v { color: var(--gt-md-pl-c); }
-.gt-container .markdown-body .pl-e,
-.gt-container .markdown-body .pl-en { color: var(--gt-md-pl-ent); }
-.gt-container .markdown-body .pl-smi,
-.gt-container .markdown-body .pl-s .pl-s1 { color: var(--gt-md-pl-smi); }
-.gt-container .markdown-body .pl-ent { color: var(--gt-md-pl-ent); }
-.gt-container .markdown-body .pl-k { color: var(--gt-md-pl-k); }
-.gt-container .markdown-body .pl-s,
-.gt-container .markdown-body .pl-pds,
-.gt-container .markdown-body .pl-sr { color: var(--gt-md-pl-s); }
-.gt-container .markdown-body .pl-v,
-.gt-container .markdown-body .pl-smw { color: var(--gt-md-pl-v); }
