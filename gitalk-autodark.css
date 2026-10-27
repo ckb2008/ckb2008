@@ -397,12 +397,18 @@
   background-color: var(--gt-bg-input);
   border-color: var(--gt-border);
   color: var(--gt-text);
-  /* 评论框英文字体设置为 Consolas；中文字体回退到系统无衬线 */
+  /* 编辑(edit)界面英文字体设置为 Consolas；中文回退系统无衬线 */
   font-family: Consolas, "Courier New", "SFMono-Regular", "Microsoft YaHei",
     "PingFang SC", "Hiragino Sans GB", monospace;
 }
 .gt-container .gt-header-textarea:hover {
   background-color: var(--gt-bg-input-hover);
+}
+/* 编辑区弹出菜单（语言/Label 等）同样使用 Consolas 英文字体 */
+.gt-container .gt-popup,
+.gt-container .gt-popup .gt-action {
+  font-family: Consolas, "Courier New", "SFMono-Regular", "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", monospace;
 }
 
 /* ============ 原生滚动条（自适应主题） ============ */
