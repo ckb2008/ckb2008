@@ -1,58 +1,137 @@
 /*
  * Gitalk 评论 / 预览（Preview）Markdown LaTeX 公式支持 —— KaTeX 版
  * ---------------------------------------------------------------------------
+ * 版本：2.0.0（带 CDN 自动切换、轮询兜底与诊断接口）
+ *
  * 原理：
- *   GitHub 的 markdown API（POST /markdown）不会渲染 LaTeX，公式会以纯文本
- *   `$...$` / `$$...$$` 的形式原样返回。Gitalk 的「评论正文」和「编辑框右下角
- *   Preview 预览」都是用 dangerouslySetInnerHTML 把这段 HTML 塞进
- *   `.gt-comment-body` / `.gt-header-preview` 的。
+ *   GitHub 的 markdown API（POST /markdown）不渲染 LaTeX，公式以纯文本
+ *   `$...$` / `$$...$$` 原样返回。Gitalk 的评论正文与编辑框 Preview 都是用
+ *   dangerouslySetInnerHTML 把这段 HTML 塞进 `.gt-comment-body` /
+ *   `.gt-header-preview` 的。
  *
- *   关键难点（也是 Preview 之前不生效的原因）：
- *   React 更新预览时是**替换容器的子节点**（container.innerHTML = html），
- *   容器元素本身不变、也不会有新节点「本身就是」 .markdown-body。
- *   所以监听必须向上找最近的公式容器祖先，而不是只看新增节点自身。
+ * 两个必须解决的关键点：
  *
- *   本脚本的做法：
- *   1) 动态加载 KaTeX（katex.min.css / katex.min.js / contrib/auto-render.min.js）；
- *   2) 用 MutationObserver 监听整棵文档树，任何新增节点都向上查找最近的
- *      `.gt-comment-body` / `.markdown-body` / `.gt-header-preview` 祖先并渲染；
- *   3) 用「容器内是否已存在 .katex」做幂等判断，避免重复渲染已渲染过的正文，
- *      同时保证预览内容被整体替换后能重新渲染；
- *   4) 点击 Preview / Edit 按钮后再补几次延迟扫描，覆盖 axios 往返造成的时序差。
+ *   1) React 更新预览时是「替换容器的子节点」，容器元素本身不变。
+ *      所以监听不能只看新增节点自身是否匹配容器，必须向上找最近的容器祖先。
  *
- * 用法（放在 Gitalk 之后即可，无需改 Gitalk 配置）：
+ *   2) GitHub 返回的 $$...$$ 常被 <br> 拆成多个文本节点：
+ *        <p>$$<br>\int_0^1 x\,dx<br>$$</p>
+ *      KaTeX 的 auto-render 只在单个文本节点内匹配分隔符，块级公式会静默失败
+ *      （行内公式不受影响，所以常被误判成「部分公式坏了」）。
+ *      渲染前需要做一次同父元素内的 $$ 配对合并。
+ *
+ * 用法：
  *   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.css">
  *   <script src="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.min.js"></script>
- *   <script src="gitalk-math.js"></script>
+ *   <script src="gitalk-math.js?v=2"></script>     ← 升级后请改版本号强制刷新缓存
  *
- * 可选配置（全部有默认值）：
- *   GitalkMath.init({
- *     version: '0.16.9',                     // KaTeX 版本
- *     cdn: 'https://cdn.jsdelivr.net/npm/katex@',  // 自定义 CDN 前缀
- *     mhchem: false,                         // 是否加载 mhchem（\ce{} 化学式）
- *     delimiters: [                          // 自定义分隔符
- *       { left: '$$', right: '$$', display: true },
- *       { left: '$',  right: '$',  display: false }
- *     ],
- *     katexOptions: { throwOnError: false, strict: 'ignore', macros: { '\\RR': '\\mathbb{R}' } },
- *     selectors: ['.gt-comment-body', '.markdown-body', '.gt-header-preview']
- *   });
- *   GitalkMath.renderAll();   // 手动全量重扫（例如你自己动态插入了评论）
+ * 可选配置（写在脚本之前）：
+ *   <script>
+ *     window.GitalkMathConfig = {
+ *       cdn: 'https://fastly.jsdelivr.net/npm/katex@',  // 只用某一个源
+ *       version: '0.16.9',
+ *       mhchem: true,                                   // 支持 \ce{H2O}
+ *       delimiters: [ ... ],
+ *     }
+ *   </script>
  *
- * 注意：
- *   - 需要页面能访问 KaTeX 的 CDN（默认 jsDelivr）。
- *   - 行内 `$` 与美元金额冲突时，可在写法上用 `\$`，或去掉 $ 分隔符，
- *     只保留 $$ / \( \) / \[ \]。
+ * 诊断：页面加载后在控制台执行
+ *   GitalkMath.debug()
+ * 会打印 KaTeX 是否就绪、用了哪个源、预览区当前状态、为什么没渲染。
  */
 (function (global) {
   'use strict';
 
-  var DEFAULTS = {
-    version: '0.16.9',
-    cdn: 'https://cdn.jsdelivr.net/npm/katex@',
+  var VERSION = '2.1.0';
+  var KATEX_VERSION = '0.16.9';
+  var STYLE_ID = 'gitalk-math-style';
+  var STATE_FLAG = '__gitalkMathState';
+
+  /*
+   * KaTeX 的多个下载源，按顺序尝试，任何一个成功即可。
+   *
+   * 顺序是刻意为中文用户排的：国内访问 cdn.jsdelivr.net 经常超时或被污染，
+   * 而 fastly.jsdelivr.net（同 CDN 的备用域名）、npmmirror（阿里 npm 镜像）、
+   * 360 前端 CDN（lib.baomitu.com）、七牛（cdn.staticfile.org）通常可用。
+   *
+   * 各源目录布局不同，所以每个资源都用回调给出完整 URL：
+   *   - jsDelivr / unpkg：/npm/katex@<ver>/dist/katex.min.js
+   *   - npmmirror：/katex/<ver>/files/dist/katex.min.js
+   *   - cdnjs / baomitu / staticfile：/<ver>/katex.min.js（没有 dist 目录）
+   *
+   * 想强制只用一个源（例如自建镜像），设置 window.GitalkMathConfig.cdn。
+   */
+  var CDN_LIST = [
+    {
+      name: 'jsdelivr-fastly',
+      css: function (v) { return 'https://fastly.jsdelivr.net/npm/katex@' + v + '/dist/katex.min.css'; },
+      js: function (v) { return 'https://fastly.jsdelivr.net/npm/katex@' + v + '/dist/katex.min.js'; },
+      autoRender: function (v) { return 'https://fastly.jsdelivr.net/npm/katex@' + v + '/dist/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://fastly.jsdelivr.net/npm/katex@' + v + '/dist/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'npmmirror',
+      css: function (v) { return 'https://registry.npmmirror.com/katex/' + v + '/files/dist/katex.min.css'; },
+      js: function (v) { return 'https://registry.npmmirror.com/katex/' + v + '/files/dist/katex.min.js'; },
+      autoRender: function (v) { return 'https://registry.npmmirror.com/katex/' + v + '/files/dist/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://registry.npmmirror.com/katex/' + v + '/files/dist/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'baomitu-360',
+      css: function (v) { return 'https://lib.baomitu.com/katex/' + v + '/katex.min.css'; },
+      js: function (v) { return 'https://lib.baomitu.com/katex/' + v + '/katex.min.js'; },
+      autoRender: function (v) { return 'https://lib.baomitu.com/katex/' + v + '/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://lib.baomitu.com/katex/' + v + '/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'staticfile-7xin',
+      css: function (v) { return 'https://cdn.staticfile.org/KaTeX/' + v + '/katex.min.css'; },
+      js: function (v) { return 'https://cdn.staticfile.org/KaTeX/' + v + '/katex.min.js'; },
+      autoRender: function (v) { return 'https://cdn.staticfile.org/KaTeX/' + v + '/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://cdn.staticfile.org/KaTeX/' + v + '/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'jsdelivr',
+      css: function (v) { return 'https://cdn.jsdelivr.net/npm/katex@' + v + '/dist/katex.min.css'; },
+      js: function (v) { return 'https://cdn.jsdelivr.net/npm/katex@' + v + '/dist/katex.min.js'; },
+      autoRender: function (v) { return 'https://cdn.jsdelivr.net/npm/katex@' + v + '/dist/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://cdn.jsdelivr.net/npm/katex@' + v + '/dist/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'unpkg',
+      css: function (v) { return 'https://unpkg.com/katex@' + v + '/dist/katex.min.css'; },
+      js: function (v) { return 'https://unpkg.com/katex@' + v + '/dist/katex.min.js'; },
+      autoRender: function (v) { return 'https://unpkg.com/katex@' + v + '/dist/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://unpkg.com/katex@' + v + '/dist/contrib/mhchem.min.js'; }
+    },
+    {
+      name: 'cdnjs',
+      css: function (v) { return 'https://cdnjs.cloudflare.com/ajax/libs/katex/' + v + '/katex.min.css'; },
+      js: function (v) { return 'https://cdnjs.cloudflare.com/ajax/libs/katex/' + v + '/katex.min.js'; },
+      autoRender: function (v) { return 'https://cdnjs.cloudflare.com/ajax/libs/katex/' + v + '/contrib/auto-render.min.js'; },
+      mhchem: function (v) { return 'https://cdnjs.cloudflare.com/ajax/libs/katex/' + v + '/contrib/mhchem.min.js'; }
+    }
+  ];
+
+  // 每个源的单次加载超时；太长会让用户对着空白预览干等，太短会误杀慢速网络
+  var SCRIPT_TIMEOUT = 3000;
+
+  var cfg = {
+    version: KATEX_VERSION,
+    // 若显式指定 cdn，则只用它（后面自动推导路径）
+    cdn: '',
     mhchem: false,
-    // 公式容器：评论正文 / 任意 markdown-body / 编辑框预览
-    selectors: ['.gt-comment-body', '.markdown-body', '.gt-header-preview'],
+    // 默认选择器同时覆盖 Gitalk（gt-*）与 Gitment（gitment-*）。
+    // 都限定在各自容器内，避免误伤博客正文里同样叫 markdown-body 的文章区域
+    // （对长文跑一遍 KaTeX 既慢又没必要）。
+    selectors: [
+      '.gt-comment-body',
+      '.gt-header-preview',
+      '.gt-container .markdown-body',
+      '.gitment-comment-body',
+      '.gitment-editor-preview',
+      '.gitment-container .markdown-body'
+    ],
     delimiters: [
       { left: '$$', right: '$$', display: true },
       { left: '$', right: '$', display: false },
@@ -62,43 +141,159 @@
     katexOptions: {
       throwOnError: false,
       strict: 'ignore'
-    }
-  };
-
-  var cfg = {
-    version: DEFAULTS.version,
-    cdn: DEFAULTS.cdn,
-    mhchem: DEFAULTS.mhchem,
-    selectors: DEFAULTS.selectors.slice(),
-    delimiters: DEFAULTS.delimiters,
-    katexOptions: DEFAULTS.katexOptions
+    },
+    // 轮询兜底间隔（毫秒）；设 0 关闭
+    pollInterval: 400
   };
 
   var SELECTOR = cfg.selectors.join(',');
-  var STYLE_ID = 'gitalk-math-style';
-  var STATE_FLAG = '__gitalkMathState';
   var loaded = false;
+  var usedCdn = '';
   var observer = null;
+  var pollTimer = null;
+  var stats = { attempts: 0, rendered: 0, lastError: '' };
 
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
   /* 资源加载                                                            */
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
 
-  function katexCSS() {
-    return cfg.cdn + cfg.version + '/dist/katex.min.css';
+  /*
+   * 依次尝试各源。
+   *
+   * 两个细节很重要：
+   *
+   * 1) 一旦某个源成功，必须立刻停手，且不能再让其它源的 script 标签继续存活。
+   *    因为其它源此时可能已经发起了网络请求，晚一点到达就会用自己的
+   *    window.katex 覆盖掉已经就绪的那一份（同名全局变量），甚至把
+   *    auto-render 的全局函数覆盖掉，导致渲染时用的是半初始化状态。
+   *    所以成功后统一把「失败的、未完成的」script 标签移除。
+   *
+   * 2) 超时用 SCRIPT_TIMEOUT（3 秒）。七个源串行最坏 21 秒，比 49 秒友好；
+   *    而单个 277KB 的 katex.min.js 在正常网络下远小于 3 秒。
+   */
+  var pendingScripts = [];
+
+  function normalizeCdnBase(base) {
+    if (!base) return base;
+    return base.charAt(base.length - 1) === '/' ? base : base + '/';
   }
-  function katexJS() {
-    return cfg.cdn + cfg.version + '/dist/katex.min.js';
+
+  /*
+   * 用户显式配置 cdn 时的描述对象。
+   *
+   * 支持三种写法：
+   *   cdn: 'https://cdn.example.com/katex/'         → 自动拼 "<ver>/dist/..."
+   *   cdn: 'https://cdn.example.com/katex@0.16.9/'  → 已含版本，不再拼
+   *   cdn: ['/static/katex/', 'https://fastly.jsdelivr.net/npm/katex@']
+   *                                                 → 数组，按顺序回落
+   *
+   * 自建镜像只需保证目录内是 npm 包的 dist 布局：
+   *   <base>/<ver>/dist/katex.min.js
+   *   <base>/<ver>/dist/katex.min.css
+   *   <base>/<ver>/dist/contrib/auto-render.min.js
+   */
+  function customDescFor(base) {
+    var b = normalizeCdnBase(base);
+    var hasVersion = /katex@[\d.]+\/$/.test(b) || /\/\d+\.\d+\.\d+\/$/.test(b);
+    function u(rel) {
+      return hasVersion ? b + rel : b + cfg.version + '/' + rel;
+    }
+    return {
+      name: 'custom(' + b + ')',
+      css: function () { return u('dist/katex.min.css'); },
+      js: function () { return u('dist/katex.min.js'); },
+      autoRender: function () { return u('dist/contrib/auto-render.min.js'); },
+      mhchem: function () { return u('dist/contrib/mhchem.min.js'); }
+    };
   }
-  function autoRenderJS() {
-    return cfg.cdn + cfg.version + '/dist/contrib/auto-render.min.js';
+
+  function customDescs() {
+    if (!cfg.cdn) return null;
+    var list = Array.isArray(cfg.cdn) ? cfg.cdn : [cfg.cdn];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i]) out.push(customDescFor(list[i]));
+    }
+    return out.length ? out : null;
   }
-  function mhchemJS() {
-    return cfg.cdn + cfg.version + '/dist/contrib/mhchem.min.js';
+
+  // 取得某个源的某类资源 URL（回调式定义，兼容各 CDN 不同的目录布局）
+  function urlOf(desc, kind) {
+    var fn = desc[kind];
+    return typeof fn === 'function' ? fn(cfg.version) : '';
+  }
+
+  var scriptCache = Object.create(null);
+
+  /*
+   * 加载一个脚本，带超时。
+   *
+   * 注意这里不缓存「失败」的结果用于永久拒绝：失败时把 cache 项删掉，
+   * 这样 GitalkMath.retry() 能重新尝试同一个 URL（例如用户刚连上代理）。
+   */
+  function loadScript(src, timeout) {
+    if (scriptCache[src]) return scriptCache[src];
+
+    var p = new Promise(function (resolve, reject) {
+      var done = false;
+      function finish(fn, arg) {
+        if (done) return;
+        done = true;
+        fn(arg);
+      }
+      var existing = document.querySelector('script[data-src="' + src + '"]');
+      if (existing && existing.getAttribute('data-gitalk-math-loaded') === '1') {
+        return finish(resolve);
+      }
+      var s = existing || document.createElement('script');
+      if (!existing) s.setAttribute('data-src', src);
+
+      var timer = global.setTimeout(function () {
+        finish(reject, new Error('timeout ' + timeout + 'ms: ' + src));
+      }, timeout || SCRIPT_TIMEOUT);
+
+      s.addEventListener('load', function () {
+        global.clearTimeout(timer);
+        s.setAttribute('data-gitalk-math-loaded', '1');
+        finish(resolve);
+      });
+      s.addEventListener('error', function () {
+        global.clearTimeout(timer);
+        finish(reject, new Error('load failed: ' + src));
+      });
+      if (!existing) {
+        s.src = src;
+        s.async = true;
+        document.head.appendChild(s);
+        pendingScripts.push(s);
+      }
+    });
+
+    scriptCache[src] = p;
+    p.catch(function () { delete scriptCache[src]; });
+    return p;
+  }
+
+  /*
+   * 成功后清理：把所有「没加载成功」的 KaTeX script 标签移走。
+   *
+   * 不清理的后果：竞速中较慢的那个源在几秒后加载完成，会用它的
+   * window.katex 覆盖掉已就绪的那一份。两份 KaTeX 的版本/内部状态
+   * 不一致时，renderMathInElement 可能拿到半初始化的实例而静默失败。
+   */
+  function cleanupFailedScripts() {
+    for (var i = pendingScripts.length - 1; i >= 0; i--) {
+      var s = pendingScripts[i];
+      if (s && s.parentNode && s.getAttribute('data-gitalk-math-loaded') !== '1') {
+        // 移除标签可阻止尚未开始的请求；已发出的请求其响应不会再执行
+        s.parentNode.removeChild(s);
+      }
+    }
+    pendingScripts.length = 0;
   }
 
   function loadCSS(href) {
-    if (document.querySelector('link[data-gitalk-math], link[href="' + href + '"]')) return;
+    if (document.querySelector('link[data-gitalk-math]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
     l.href = href;
@@ -106,41 +301,64 @@
     document.head.appendChild(l);
   }
 
-  // 同名脚本只加载一次；返回 Promise，并发调用会共享同一份加载
-  var scriptCache = Object.create(null);
-  function loadScript(src) {
-    if (scriptCache[src]) return scriptCache[src];
-    scriptCache[src] = new Promise(function (resolve, reject) {
-      var existing = document.querySelector('script[src="' + src + '"]');
-      if (existing) {
-        if (existing.getAttribute('data-gitalk-math-loaded') === '1') return resolve();
-        existing.addEventListener('load', function () { resolve(); });
-        existing.addEventListener('error', function () { reject(new Error('load failed: ' + src)); });
-        return;
+  function tryCdn(desc) {
+    var cssUrl = urlOf(desc, 'css');
+    var jsUrl = urlOf(desc, 'js');
+    var arUrl = urlOf(desc, 'autoRender');
+
+    return loadScript(jsUrl, SCRIPT_TIMEOUT).then(function () {
+      if (!global.katex) throw new Error('katex 未挂载: ' + jsUrl);
+      return loadScript(arUrl, SCRIPT_TIMEOUT);
+    }).then(function () {
+      if (typeof global.renderMathInElement !== 'function') {
+        throw new Error('renderMathInElement 未挂载: ' + arUrl);
       }
-      var s = document.createElement('script');
-      s.src = src;
-      s.async = true;
-      s.onload = function () {
-        s.setAttribute('data-gitalk-math-loaded', '1');
-        resolve();
-      };
-      s.onerror = function () { reject(new Error('load failed: ' + src)); };
-      document.head.appendChild(s);
+      loadCSS(cssUrl);
+      if (cfg.mhchem) {
+        return loadScript(urlOf(desc, 'mhchem'), SCRIPT_TIMEOUT).catch(function () {
+          if (global.console) global.console.warn('[GitalkMath] mhchem 加载失败，\\ce{} 不可用');
+        });
+      }
+    }).then(function () {
+      return desc.name;
     });
-    return scriptCache[src];
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 样式：预览区与正文区的公式排版                                      */
-  /* ------------------------------------------------------------------ */
+  function loadKaTeX() {
+    var custom = customDescs();
+    var list = custom ? custom.concat(CDN_LIST) : CDN_LIST.slice();
+
+    var i = 0;
+    function next() {
+      if (i >= list.length) {
+        return Promise.reject(new Error('所有 KaTeX CDN 均不可用'));
+      }
+      var desc = list[i++];
+      stats.attempts++;
+      return tryCdn(desc).then(function (name) {
+        usedCdn = name + ' (' + urlOf(desc, 'js') + ')';
+        cleanupFailedScripts();   // 成功后立刻掐掉其它源的残留
+        return name;
+      }).catch(function (e) {
+        stats.lastError = String(e && e.message || e);
+        if (global.console) {
+          global.console.warn('[GitalkMath] CDN 失败，尝试下一个：' + stats.lastError);
+        }
+        return next();
+      });
+    }
+    return next();
+  }
+
+  /* ================================================================== */
+  /* 样式                                                               */
+  /* ================================================================== */
 
   function injectStyle() {
     if (document.getElementById(STYLE_ID)) return;
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = [
-      /* 块级公式在窄屏下横向滚动，避免撑破评论区 */
       '.gt-container .katex-display,',
       '.gt-header-preview .katex-display,',
       '.gt-comment-body .katex-display {',
@@ -149,61 +367,57 @@
       '  padding: 2px 0;',
       '  margin: 0.8em 0;',
       '}',
-      '.gt-container .katex { font-size: 1.02em; }',
-      /* 预览区高度留白，避免公式异步渲染前后跳动过大 */
-      '.gt-container .gt-header-preview { min-height: 3em; }',
-      /* 渲染失败（如未加载完）时公式不闪烁：先按文本正常显示即可，无需额外处理 */
-      /* 暗色主题下公式颜色跟随文字色，KaTeX 默认 currentColor，这里兜底一次 */
-      '.gt-container .katex { color: inherit; }'
+      '.gt-container .katex { font-size: 1.02em; color: inherit; }',
+      '.gt-container .gt-header-preview { min-height: 3em; }'
     ].join('\n');
     document.head.appendChild(style);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 渲染                                                            */
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
+  /* 渲染                                                               */
+  /* ================================================================== */
 
   function hasTeX(text) {
     return /\$|\\\(|\\\[/.test(text || '');
   }
 
-  // 幂等判断：容器内已经有 .katex 说明渲染过（且内容没被整体替换）
+  /*
+   * 收集「公式之外」的文本。
+   *
+   * 不能直接看 node.textContent 里有没有 $，因为公式渲染后 KaTeX 生成的
+   * 节点里也含 $（如 $\Gamma$ 的 annotation 保留原始 LaTeX）。所以必须
+   * 跳过 .katex 子树，只看尚未被渲染的文本。
+   *
+   * 这样也修掉了「部分公式成功、部分失败」的场景：只要还有游离的 $ 存在，
+   * 就说明需要再渲染一次，而不是看到第一个 .katex 就整块放弃。
+   */
+  function textOutsideKatex(node) {
+    var out = '';
+    function walk(n) {
+      if (n.nodeType === 3) { out += n.nodeValue || ''; return; }
+      if (n.nodeType !== 1) return;
+      if (n.classList && n.classList.contains('katex')) return;
+      for (var c = n.firstChild; c; c = c.nextSibling) walk(c);
+    }
+    walk(node);
+    return out;
+  }
+
   function needsRender(node) {
     if (!node || node.nodeType !== 1) return false;
     if (!node.querySelectorAll) return false;
-    if (node.querySelector('.katex')) return false;
-    return hasTeX(node.textContent);
+    return hasTeX(textOutsideKatex(node));
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 跨节点的块级公式归一化                                              */
-  /* ------------------------------------------------------------------ */
-  /*
-   * KaTeX auto-render 只在**单个文本节点**内匹配分隔符。而 GitHub markdown API
-   * 返回的 $$...$$ 块常常是：
-   *     <p>$$<br>\int ... <br>$$</p>
-   * 或换行被渲染成 <br>，导致开头的 $$ 和结尾的 $$ 落在不同文本节点，
-   * 块级公式就渲染不出来。
-   *
-   * 这里在渲染前做一次「同父元素内的 $$ 配对修复」：把两个 $$ 之间的 <br>
-   * 换成换行文本，并把区间内的文本节点合并成一个，使 auto-render 能识别。
-   * 只在不含其它非 br 元素、且两端确实配有 $$ 时才动手，避免误改结构。
-   */
-
-  var SKIP_TAGS = { PRE: 1, CODE: 1, SCRIPT: 1, STYLE: 1, TEXTAREA: 1, NOSCRIPT: 1 };
+  /* ---- 跨节点 $$ 合并 ---- */
 
   function isBr(node) {
     return node && node.nodeType === 1 && node.tagName === 'BR';
   }
 
-  function isWhitespaceText(node) {
-    return node && node.nodeType === 3 && !/\S/.test(node.nodeValue || '');
-  }
-
-  // 统计未被反斜杠转义的 '$$' 出现次数（奇数表示一个未闭合的开标记）
+  // 未被转义的 '$$' 计数（奇数 = 一个未闭合的开标记）
   function countDoubleDollar(text) {
-    var n = 0;
-    var i = 0;
+    var n = 0, i = 0;
     while (i < text.length - 1) {
       if (text.charAt(i) === '\\') { i += 2; continue; }
       if (text.charAt(i) === '$' && text.charAt(i + 1) === '$') { n++; i += 2; continue; }
@@ -213,8 +427,7 @@
   }
 
   function mergeRange(parent, startIdx, endIdx) {
-    var parts = [];
-    var nodes = [];
+    var parts = [], nodes = [];
     for (var i = startIdx; i <= endIdx; i++) {
       var n = parent.childNodes[i];
       nodes.push(n);
@@ -228,47 +441,30 @@
     }
   }
 
-  // 修复单个父元素里被拆开的 $$...$$（可处理多组）
   function mergeBrokenBlocks(parent) {
     if (!parent || !parent.childNodes || !parent.childNodes.length) return;
-
-    var guard = 0;
-    var changed = true;
+    var guard = 0, changed = true;
     while (changed && guard++ < 20) {
       changed = false;
       var children = parent.childNodes;
       var openIdx = -1;
-
       for (var i = 0; i < children.length; i++) {
         var node = children[i];
-
         if (node.nodeType === 3) {
-          var c = countDoubleDollar(node.nodeValue || '');
-          if (c % 2 === 0) continue;
-
-          if (openIdx < 0) {
-            openIdx = i;
-            continue;
-          }
-
-          // 找到闭合：中间允许文本节点与 <br>，不允许其它元素
+          if (countDoubleDollar(node.nodeValue || '') % 2 === 0) continue;
+          if (openIdx < 0) { openIdx = i; continue; }
           var ok = true;
           for (var k = openIdx + 1; k < i; k++) {
             var mid = children[k];
             if (mid.nodeType === 1 && !isBr(mid)) { ok = false; break; }
           }
-          if (ok) {
-            mergeRange(parent, openIdx, i);
-            changed = true;
-            break;
-          }
+          if (ok) { mergeRange(parent, openIdx, i); changed = true; break; }
           openIdx = -1;
           continue;
         }
-
         if (node.nodeType === 1) {
-          if (isBr(node)) continue;          // <br> 可以跨越
-          openIdx = -1;                       // 其它元素打断配对
+          if (isBr(node)) continue;
+          openIdx = -1;
         }
       }
     }
@@ -276,24 +472,22 @@
 
   function normalizeBlocks(root) {
     if (!root || !root.querySelectorAll) return;
-    // 先处理根自身作为父节点的情况
     mergeBrokenBlocks(root);
     var all = root.querySelectorAll('p, div, li, blockquote, td, h1, h2, h3, h4, h5, h6');
     for (var i = 0; i < all.length; i++) {
-      if (all[i].querySelector('.katex')) continue;
-      if ((all[i].textContent || '').indexOf('$$') < 0) continue;
+      // 只看未被渲染的文本；已经成功的公式不必再进一遍
+      if ((textOutsideKatex(all[i]) || '').indexOf('$$') < 0) continue;
       mergeBrokenBlocks(all[i]);
     }
   }
 
   function renderNode(node) {
-    if (!global.renderMathInElement) return false;
+    if (typeof global.renderMathInElement !== 'function') return false;
     if (!needsRender(node)) return false;
     try {
       normalizeBlocks(node);
       global.renderMathInElement(node, {
         delimiters: cfg.delimiters,
-        // 不要动代码块 / 输入框里的 $（避免误伤货币、shell 变量等）
         ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
         ignoredClasses: ['gt-header-textarea', 'katex', 'gt-error'],
         throwOnError: cfg.katexOptions.throwOnError,
@@ -302,22 +496,20 @@
         errorColor: cfg.katexOptions.errorColor || undefined
       });
       node[STATE_FLAG] = (node[STATE_FLAG] || 0) + 1;
+      stats.rendered++;
       return true;
     } catch (e) {
+      stats.lastError = String(e && e.message || e);
       if (global.console) global.console.warn('[GitalkMath] 渲染失败：', e);
       return false;
     }
   }
 
-  // 向上找最近的公式容器（React 替换子节点时需要它）
   function containerOf(el) {
     if (!el || el.nodeType !== 1) return null;
     if (el.matches && el.matches(SELECTOR)) return el;
-    if (el.closest) {
-      var p = el.parentElement;
-      return p && p.closest ? p.closest(SELECTOR) : null;
-    }
-    return null;
+    var p = el.parentElement;
+    return p && p.closest ? p.closest(SELECTOR) : null;
   }
 
   function renderAll(root) {
@@ -327,13 +519,12 @@
     for (var i = 0; i < nodes.length; i++) renderNode(nodes[i]);
   }
 
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
   /* 变更监听                                                            */
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
 
-  // 我们自己渲染产生的节点（KaTeX 输出）不应触发再次渲染
   function isKatexOutput(n) {
-    if (!n || n.nodeType !== 1) return true; // 文本节点、注释等一律忽略
+    if (!n || n.nodeType !== 1) return true;
     if (n.classList && (n.classList.contains('katex') || n.classList.contains('katex-display'))) return true;
     if (n.closest && n.closest('.katex')) return true;
     return false;
@@ -342,12 +533,8 @@
   function scanAdded(node) {
     if (!node || node.nodeType !== 1) return;
     if (isKatexOutput(node)) return;
-
-    // 1) 新增节点自己就是公式容器（整块被替换 / 首次插入）
     var self = containerOf(node);
-    if (self) { renderNode(self); }
-
-    // 2) 新增节点内部包含公式容器（例如整段评论列表被换掉）
+    if (self) renderNode(self);
     if (node.querySelectorAll) {
       var inner = node.querySelectorAll(SELECTOR);
       for (var i = 0; i < inner.length; i++) renderNode(inner[i]);
@@ -355,12 +542,7 @@
   }
 
   function startObserver() {
-    if (observer) return;
-    if (!('MutationObserver' in global)) {
-      // 老旧浏览器：退化为定时扫描
-      global.setInterval(function () { renderAll(document); }, 1000);
-      return;
-    }
+    if (observer || !('MutationObserver' in global)) return;
     observer = new MutationObserver(function (mutations) {
       for (var i = 0; i < mutations.length; i++) {
         var added = mutations[i].addedNodes;
@@ -371,44 +553,37 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Preview 按钮兜底：axios 往返完成后补扫几次                          */
-  /* ------------------------------------------------------------------ */
-
-  var PREVIEW_TRIGGER = '.gt-btn-preview, .gt-header-controls, .gt-header-preview';
-
-  function sweepPreview() {
-    var box = document.querySelector('.gt-header-preview');
-    if (box) renderNode(box);
+  /*
+   * 轮询兜底。
+   * MutationObserver 在极少数情况下会漏掉预览更新（例如容器被复用、
+   * 或预览内容来自缓存、或框架在微任务里既删又加）。每 400ms 轻量扫一遍
+   * 「可见的预览区 + 仍含 $ 却无公式」的元素，代价极低（只读 textContent）。
+   */
+  function sweep() {
+    if (document.hidden) return;
+    var boxes = document.querySelectorAll('.gt-header-preview, .gt-comment-body');
+    for (var i = 0; i < boxes.length; i++) {
+      var box = boxes[i];
+      // 隐藏的预览区也要处理：一旦显示就不该再等下一次触发
+      if (needsRender(box)) renderNode(box);
+    }
   }
 
-  function bindPreviewFallback() {
-    if (document.documentElement.getAttribute('data-gitalk-math-click') === '1') return;
-    document.documentElement.setAttribute('data-gitalk-math-click', '1');
-
-    document.addEventListener('click', function (e) {
-      var t = e.target;
-      if (!t || !t.closest) return;
-      // 点击 Preview / Edit 按钮，或点击预览区本身（复制公式时重新渲染不会有害）
-      if (!t.closest(PREVIEW_TRIGGER)) return;
-      // axios POST /markdown 是异步的：立刻、短延时、长延时各扫一次
-      sweepPreview();
-      global.setTimeout(sweepPreview, 120);
-      global.setTimeout(sweepPreview, 400);
-      global.setTimeout(sweepPreview, 1000);
-      global.setTimeout(sweepPreview, 2500);
-    }, true);
+  function startPolling() {
+    if (pollTimer || !cfg.pollInterval) return;
+    pollTimer = global.setInterval(sweep, cfg.pollInterval);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* 初始化                                                              */
-  /* ------------------------------------------------------------------ */
+  /* ================================================================== */
+  /* 初始化                                                             */
+  /* ================================================================== */
 
   function applyOptions(opts) {
     if (!opts) return;
     if (opts.version) cfg.version = opts.version;
     if (opts.cdn) cfg.cdn = opts.cdn;
     if (typeof opts.mhchem === 'boolean') cfg.mhchem = opts.mhchem;
+    if (typeof opts.pollInterval === 'number') cfg.pollInterval = opts.pollInterval;
     if (opts.delimiters && opts.delimiters.length) cfg.delimiters = opts.delimiters;
     if (opts.selectors && opts.selectors.length) {
       cfg.selectors = opts.selectors.slice();
@@ -423,47 +598,115 @@
     }
   }
 
-  function init(opts) {
-    applyOptions(opts);
+  function boot() {
     injectStyle();
-    loadCSS(katexCSS());
 
-    var chain = Promise.all([loadScript(katexJS())]);
-    if (cfg.mhchem) {
-      // mhchem 依赖 KaTeX 已加载
-      chain = chain.then(function () { return loadScript(mhchemJS()); });
+    // 页面里已经引过 KaTeX + auto-render（比如主题自带）就别重复加载
+    if (global.katex && typeof global.renderMathInElement === 'function') {
+      loaded = true;
+      usedCdn = '(页面已自带 KaTeX，未重复加载)';
+      renderAll(document);
+      startObserver();
+      startPolling();
+      if (global.console) {
+        global.console.log('[GitalkMath] v' + VERSION + ' 已就绪，复用页面已有的 KaTeX');
+      }
+      return;
     }
-    chain
-      .then(function () { return loadScript(autoRenderJS()); })
-      .then(function () {
-        loaded = true;
-        renderAll(document);
-        startObserver();
-        bindPreviewFallback();
-      })
-      .catch(function (e) {
-        if (global.console) {
-          global.console.warn('[GitalkMath] KaTeX 加载失败，公式未启用（请检查 CDN 可达性）：', e);
-        }
-      });
+
+    loadKaTeX().then(function () {
+      loaded = true;
+      renderAll(document);
+      startObserver();
+      startPolling();
+      if (global.console) {
+        global.console.log('[GitalkMath] v' + VERSION + ' 已就绪，KaTeX 源：' + usedCdn);
+      }
+    }).catch(function (e) {
+      stats.lastError = String(e && e.message || e);
+      // 即使加载失败也开监听：用户可能稍后用 retry() 补上
+      startObserver();
+      startPolling();
+      if (global.console) {
+        global.console.error(
+          '[GitalkMath] KaTeX 加载失败，公式无法渲染。\n' +
+          '原因：' + stats.lastError + '\n' +
+          '→ 请检查网络能否访问 KaTeX CDN，或把 window.GitalkMathConfig.cdn 指向自建镜像。\n' +
+          '→ 自建镜像示例：window.GitalkMathConfig = { cdn: "/static/katex/" }（目录内需有 katex.min.js / katex.min.css / contrib/auto-render.min.js）\n' +
+          '→ 修好网络后在控制台执行 GitalkMath.retry() 立即重试，无需刷新页面。'
+        );
+      }
+    });
+  }
+
+  function debug() {
+    var d = document;
+    var preview = d.querySelector('.gt-header-preview');
+    var info = {
+      version: VERSION,
+      katexReady: loaded && typeof global.renderMathInElement === 'function',
+      usedCdn: usedCdn || '(未加载)',
+      lastError: stats.lastError || '(无)',
+      renderCount: stats.rendered,
+      attempts: stats.attempts,
+      katexObject: !!global.katex,
+      autoRenderFn: typeof global.renderMathInElement,
+      previewExist: !!preview,
+      previewVisible: !!preview && !preview.classList.contains('hide'),
+      previewHasDollar: !!preview && hasTeX(preview.textContent),
+      previewKatexCount: preview ? preview.querySelectorAll('.katex').length : 0,
+      commentBodies: d.querySelectorAll('.gt-comment-body').length,
+      commentKatexCount: d.querySelectorAll('.gt-comment-body .katex').length
+    };
+    if (global.console && global.console.table) global.console.table(info);
+    else if (global.console) global.console.log(info);
+    return info;
   }
 
   global.GitalkMath = {
-    init: init,
+    version: VERSION,
+    init: function (opts) { applyOptions(opts); },
     renderAll: renderAll,
-    renderPreview: sweepPreview,
-    isReady: function () { return loaded && !!global.renderMathInElement; },
-    options: cfg
+    renderPreview: function () {
+      var p = document.querySelector('.gt-header-preview');
+      return p ? renderNode(p) : false;
+    },
+    retry: function () {
+      // 情况一：之前的加载失败了，但页面后来自己出现了 KaTeX（用户手动引了脚本），
+      // 直接接管，不再走网络。
+      if (!loaded && global.katex && typeof global.renderMathInElement === 'function') {
+        loaded = true;
+        usedCdn = '(retry 时接管页面已有的 KaTeX)';
+        renderAll(document);
+        sweep();
+        startObserver();
+        startPolling();
+        return true;
+      }
+      if (loaded) {
+        renderAll(document);
+        sweep();
+        return true;
+      }
+      // 情况二：清掉失败缓存，把所有源重新试一遍
+      scriptCache = Object.create(null);
+      pendingScripts.length = 0;
+      stats.attempts = 0;
+      boot();
+      return true;
+    },
+    isReady: function () { return loaded && typeof global.renderMathInElement === 'function'; },
+    debug: debug,
+    options: cfg,
+    stats: stats
   };
 
-  // 允许在本脚本之前定义 window.GitalkMathConfig = {...} 来预设参数
-  // （自动初始化会先应用它，再用 init(opts) 的显式参数覆盖）
   if (global.GitalkMathConfig) applyOptions(global.GitalkMathConfig);
+  global.GitalkMath.init = function (opts) { applyOptions(opts); };
 
-  // 默认自动初始化（重复调用 init 是幂等的）
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { init(); });
+    document.addEventListener('DOMContentLoaded', boot);
   } else {
-    init();
+    boot();
   }
 })(typeof window !== 'undefined' ? window : this);
