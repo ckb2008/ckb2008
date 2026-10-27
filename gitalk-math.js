@@ -1,7 +1,7 @@
 /*
  * Gitalk 评论 / 预览（Preview）Markdown LaTeX 公式支持 —— KaTeX 版
  * ---------------------------------------------------------------------------
- * 版本：2.0.0（带 CDN 自动切换、轮询兜底与诊断接口）
+ * 版本：2.2.0（带 CDN 自动切换、轮询兜底与诊断接口）
  *
  * 原理：
  *   GitHub 的 markdown API（POST /markdown）不渲染 LaTeX，公式以纯文本
@@ -42,7 +42,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '2.1.0';
+  var VERSION = '2.2.0';
   var KATEX_VERSION = '0.16.9';
   var STYLE_ID = 'gitalk-math-style';
   var STATE_FLAG = '__gitalkMathState';
@@ -663,6 +663,13 @@
     return info;
   }
 
+  /*
+   * 在赋值之前先把页面上已有的 GitalkMath 抓下来。
+   * 顺序很重要：赋值之后再读 global.GitalkMath 拿到的是新对象，永远比不出差异，
+   * 覆盖检测就永远不触发（踩过这个坑）。
+   */
+  var PREVIOUS = global.GitalkMath;
+
   global.GitalkMath = {
     version: VERSION,
     init: function (opts) { applyOptions(opts); },
@@ -701,8 +708,43 @@
     stats: stats
   };
 
+  /*
+   * 页面上留一个可查的版本指纹。
+   * 排查「改完没生效」时，先看这个属性，就知道浏览器到底加载了哪一版：
+   *   document.documentElement.getAttribute('data-gitalk-math')
+   */
+  function stampVersion() {
+    try {
+      document.documentElement.setAttribute('data-gitalk-math', VERSION);
+    } catch (e) { /* 老浏览器忽略 */ }
+  }
+
+  /*
+   * 覆盖检测：如果页面上已经存在一个 GitalkMath，说明同一个脚本被引了两次，
+   * 或者旧版本还在缓存里而新版本又加载了一遍。后者最坑 —— 旧版本可能没有
+   * debug() 之类的新 API，控制台报 "GitalkMath.debug is not a function"，
+   * 让人以为是代码写错了。这里直接给出明确警告。
+   */
+  function warnIfOverwriting() {
+    var old = PREVIOUS;
+    if (!old || typeof old.version === 'undefined') return;
+    if (old.version === VERSION) return;
+    if (global.console) {
+      global.console.warn(
+        '[GitalkMath] 检测到已加载的旧版本 v' + old.version +
+        '，现已被 v' + VERSION + ' 覆盖。\n' +
+        '→ 若之前控制台报 "xxx is not a function"，就是旧版本缓存导致的。\n' +
+        '→ 请给引用加版本参数彻底解决：<script src="gitalk-math.js?v=' + VERSION + '"></script>'
+      );
+    }
+  }
+
+  warnIfOverwriting();
+
   if (global.GitalkMathConfig) applyOptions(global.GitalkMathConfig);
   global.GitalkMath.init = function (opts) { applyOptions(opts); };
+
+  stampVersion();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
