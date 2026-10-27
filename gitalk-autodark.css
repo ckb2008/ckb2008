@@ -63,6 +63,11 @@
 
   --gt-input-mask: rgba(0, 0, 0, 0.6);
 
+  /* 原生滚动条（亮色） */
+  --gt-scrollbar-track: #f1f1f1;
+  --gt-scrollbar-thumb: #c1c1c1;
+  --gt-scrollbar-thumb-hover: #a8a8a8;
+
   /* ---- GitHub Markdown 正文 ---- */
   --gt-md-text: #24292e;
   --gt-md-link: #0366d6;
@@ -135,6 +140,11 @@
 
     --gt-input-mask: rgba(0, 0, 0, 0.6);
 
+    /* 原生滚动条（暗色） */
+    --gt-scrollbar-track: #161b22;
+    --gt-scrollbar-thumb: #30363d;
+    --gt-scrollbar-thumb-hover: #484f58;
+
     --gt-md-text: #c9d1d9;
     --gt-md-link: #58a6ff;
     --gt-md-h-border: #30363d;
@@ -204,6 +214,11 @@
 
   --gt-input-mask: rgba(0, 0, 0, 0.6);
 
+  /* 原生滚动条（暗色） */
+  --gt-scrollbar-track: #161b22;
+  --gt-scrollbar-thumb: #30363d;
+  --gt-scrollbar-thumb-hover: #484f58;
+
   --gt-md-text: #c9d1d9;
   --gt-md-link: #58a6ff;
   --gt-md-h-border: #30363d;
@@ -271,6 +286,11 @@
   --gt-email-signature-border: #dfe2e5;
 
   --gt-input-mask: rgba(0, 0, 0, 0.6);
+
+  /* 原生滚动条（亮色） */
+  --gt-scrollbar-track: #f1f1f1;
+  --gt-scrollbar-thumb: #c1c1c1;
+  --gt-scrollbar-thumb-hover: #a8a8a8;
 
   --gt-md-text: #24292e;
   --gt-md-link: #0366d6;
@@ -377,9 +397,67 @@
   background-color: var(--gt-bg-input);
   border-color: var(--gt-border);
   color: var(--gt-text);
+  /* 评论框英文字体设置为 Consolas；中文字体回退到系统无衬线 */
+  font-family: Consolas, "Courier New", "SFMono-Regular", "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", monospace;
 }
 .gt-container .gt-header-textarea:hover {
   background-color: var(--gt-bg-input-hover);
+}
+
+/* ============ 原生滚动条（自适应主题） ============ */
+.gt-container {
+  scrollbar-color: var(--gt-scrollbar-thumb) var(--gt-scrollbar-track);
+  scrollbar-width: thin;
+}
+.gt-container ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.gt-container ::-webkit-scrollbar-track {
+  background: var(--gt-scrollbar-track);
+}
+.gt-container ::-webkit-scrollbar-thumb {
+  background: var(--gt-scrollbar-thumb);
+  border-radius: 6px;
+  border: 2px solid var(--gt-scrollbar-track);
+}
+.gt-container ::-webkit-scrollbar-thumb:hover {
+  background: var(--gt-scrollbar-thumb-hover);
+}
+/* 评论正文与代码块内部出现滚动时同样适用 */
+.gt-container .gt-comment-content,
+.gt-container .markdown-body pre,
+.gt-container .markdown-body .highlight pre,
+.gt-container .gt-header-textarea {
+  scrollbar-color: var(--gt-scrollbar-thumb) var(--gt-scrollbar-track);
+}
+.gt-container .gt-comment-content::-webkit-scrollbar,
+.gt-container .markdown-body pre::-webkit-scrollbar,
+.gt-container .markdown-body .highlight pre::-webkit-scrollbar,
+.gt-container .gt-header-textarea::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.gt-container .gt-comment-content::-webkit-scrollbar-track,
+.gt-container .markdown-body pre::-webkit-scrollbar-track,
+.gt-container .markdown-body .highlight pre::-webkit-scrollbar-track,
+.gt-container .gt-header-textarea::-webkit-scrollbar-track {
+  background: var(--gt-scrollbar-track);
+}
+.gt-container .gt-comment-content::-webkit-scrollbar-thumb,
+.gt-container .markdown-body pre::-webkit-scrollbar-thumb,
+.gt-container .markdown-body .highlight pre::-webkit-scrollbar-thumb,
+.gt-container .gt-header-textarea::-webkit-scrollbar-thumb {
+  background: var(--gt-scrollbar-thumb);
+  border-radius: 6px;
+  border: 2px solid var(--gt-scrollbar-track);
+}
+.gt-container .gt-comment-content::-webkit-scrollbar-thumb:hover,
+.gt-container .markdown-body pre::-webkit-scrollbar-thumb:hover,
+.gt-container .markdown-body .highlight pre::-webkit-scrollbar-thumb:hover,
+.gt-container .gt-header-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--gt-scrollbar-thumb-hover);
 }
 
 .gt-container .gt-comment-content {
