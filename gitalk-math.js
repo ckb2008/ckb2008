@@ -1,7 +1,7 @@
 /*
  * Gitalk 评论 / 预览（Preview）Markdown LaTeX 公式支持 —— KaTeX 版
  * ---------------------------------------------------------------------------
- * 版本：2.2.0（带 CDN 自动切换、轮询兜底与诊断接口）
+ * 版本：2.3.0（带 CDN 自动切换、轮询兜底与诊断接口）
  *
  * 原理：
  *   GitHub 的 markdown API（POST /markdown）不渲染 LaTeX，公式以纯文本
@@ -42,7 +42,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = '2.2.0';
+  var VERSION = '2.3.0';
   var KATEX_VERSION = '0.16.9';
   var STYLE_ID = 'gitalk-math-style';
   var STATE_FLAG = '__gitalkMathState';
@@ -354,19 +354,68 @@
   /* 样式                                                               */
   /* ================================================================== */
 
+  /*
+   * 长公式的横向滚动条：用**原生**滚动条。
+   *
+   * 做法是只写标准属性 scrollbar-width / scrollbar-color，再配 color-scheme
+   * 让浏览器自己按亮/暗选择滚动条底色；**不写 ::-webkit-scrollbar** ——
+   * 一旦写了它，系统滚动条就会被换成自绘的固定像素方块，那正是之前
+   * "不像原生"的来源。
+   *
+   * 颜色按三档取值，后面的优先级更高：
+   *   1. 系统设置 prefers-color-scheme（默认跟随）
+   *   2. .gitalk-theme-dark / .gitalk-theme-light（手动锁定，配合切换按钮）
+   *
+   * 变量名与 gitalk-autodark.css 保持一致，缺省时也有兜底色，
+   * 所以只用 gitalk-math.js、不引主题 CSS 时同样能显示正确。
+   */
   function injectStyle() {
     if (document.getElementById(STYLE_ID)) return;
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = [
+      /* ① 出现横向溢出的公式块：亮色（默认） */
+      ':root {',
+      '  --gitalk-math-scrollbar-track: transparent;',
+      '  --gitalk-math-scrollbar-thumb: rgba(0, 0, 0, 0.28);',
+      '}',
+      /* ② 跟随系统深色 */
+      '@media (prefers-color-scheme: dark) {',
+      '  :root {',
+      '    --gitalk-math-scrollbar-track: transparent;',
+      '    --gitalk-math-scrollbar-thumb: rgba(201, 209, 217, 0.42);',
+      '  }',
+      '}',
+      /* ③ 手动锁定深色 / 亮色（类名可写在 <html>，也可写在任意祖先元素上） */
+      '.gitalk-theme-dark {',
+      '  --gitalk-math-scrollbar-track: transparent;',
+      '  --gitalk-math-scrollbar-thumb: rgba(201, 209, 217, 0.42);',
+      '}',
+      '.gitalk-theme-light {',
+      '  --gitalk-math-scrollbar-track: transparent;',
+      '  --gitalk-math-scrollbar-thumb: rgba(0, 0, 0, 0.28);',
+      '}',
+      /* ④ 公式块本身 */
       '.gt-container .katex-display,',
       '.gt-header-preview .katex-display,',
-      '.gt-comment-body .katex-display {',
+      '.gt-comment-body .katex-display,',
+      '.gitment-container .katex-display,',
+      '.gitment-editor-preview .katex-display,',
+      '.gitment-comment-body .katex-display {',
       '  overflow-x: auto;',
       '  overflow-y: hidden;',
-      '  padding: 2px 0;',
+      '  padding: 2px 0 6px;',      /* 底部留白，细滚动条不压字 */
       '  margin: 0.8em 0;',
+      '  scrollbar-width: thin;',   /* 只细一点，形状仍是系统的 */
+      '  scrollbar-color: var(--gitalk-math-scrollbar-thumb) var(--gitalk-math-scrollbar-track);',
       '}',
+      /* ⑤ 让浏览器自己按主题给滚动条上色（支持的原生机制） */
+      '.gt-container .katex-display,',
+      '.gitment-container .katex-display { color-scheme: light dark; }',
+      '.gitalk-theme-dark .katex-display,',
+      '.gitalk-theme-dark.katex-display { color-scheme: dark; }',
+      '.gitalk-theme-light .katex-display,',
+      '.gitalk-theme-light.katex-display { color-scheme: light; }',
       '.gt-container .katex { font-size: 1.02em; color: inherit; }',
       '.gt-container .gt-header-preview { min-height: 3em; }'
     ].join('\n');
